@@ -7,6 +7,7 @@ import {
   canonicalPath,
   formatInstancePath,
   parseInstancePath,
+  projectRelative,
 } from '../sourcemap.js';
 import { assertNotSynced, assertSubtreeNotSynced } from '../tools/fork-tools.js';
 
@@ -143,11 +144,18 @@ describe('Rojo sourcemap resolution', () => {
     let finish!: () => void;
     const runRojo = () => new Promise<string>((fulfil) => { finish = () => fulfil(JSON.stringify(SOURCEMAP)); });
     const resolver = new SourcemapResolver(() => root, { runRojo, env: {} });
-    const refused = assertNotSynced('game.ServerScriptService.Main', resolver);
-    const subtree = assertSubtreeNotSynced('game.ServerScriptService', false, resolver);
+    // Both expectations attach before either settles, so one failing cannot leave the other rejection unhandled and crash jest.
+    const refused = expect(assertNotSynced('game.ServerScriptService.Main', resolver)).rejects.toThrow(/src\/server\/Main\.server\.luau/);
+    const subtree = expect(assertSubtreeNotSynced('game.ServerScriptService', false, resolver)).rejects.toThrow(/2 script\(s\)/);
     await new Promise((resolve) => setImmediate(resolve));
     finish();
-    await expect(refused).rejects.toThrow(/src\/server\/Main\.server\.luau/);
-    await expect(subtree).rejects.toThrow(/2 script\(s\)/);
+    await Promise.all([refused, subtree]);
+  });
+
+  test('project files are shown relative to the project with forward slashes, other files in full', () => {
+    const root = path.join(os.tmpdir(), 'game');
+    expect(projectRelative(root, path.join(root, 'src', 'server', 'Main.server.luau'))).toBe('src/server/Main.server.luau');
+    const outside = path.join(os.tmpdir(), 'elsewhere', 'Util.luau');
+    expect(projectRelative(root, outside)).toBe(outside);
   });
 });

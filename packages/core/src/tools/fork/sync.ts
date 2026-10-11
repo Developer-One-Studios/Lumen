@@ -1,11 +1,10 @@
 import { readFile } from 'fs/promises';
-import { relative } from 'path';
 import {
   formatInstancePath,
   isUnderPath,
   parseInstancePath,
+  projectRelative,
   starterPath,
-  type SourcemapIndex,
   type SourcemapResolver,
 } from '../../sourcemap.js';
 import { withArgs } from '../fork-luau.js';
@@ -250,11 +249,6 @@ async function digestFiles(files: string[]): Promise<Map<string, SourceDigest | 
   return digests;
 }
 
-function displayFile(index: SourcemapIndex, file: string): string {
-  const rel = relative(index.projectRoot, file);
-  return rel.startsWith('..') ? file : rel;
-}
-
 function scripts(count: number, verb?: [string, string]): string {
   const noun = `${count} script${count === 1 ? '' : 's'}`;
   return verb ? `${noun} ${verb[count === 1 ? 0 : 1]}` : noun;
@@ -320,7 +314,7 @@ export async function verifySync(
     const file = index.byPath.get(path)!;
     const digest = digests.get(file);
     if (digest) expected.push({ path, file, digest });
-    else goneFromDisk.push(displayFile(index, file));
+    else goneFromDisk.push(projectRelative(index.projectRoot, file));
   }
   const byPath = new Map(expected.map((entry) => [entry.path, entry]));
 
@@ -377,7 +371,7 @@ export async function verifySync(
       ...(report.stale.length > 0 ? {
         stale_scripts: report.stale.slice(0, limit).map((entry) => {
           const disk = byPath.get(entry.path);
-          return { path: entry.path, file: disk ? displayFile(index, disk.file) : null, disk_bytes: disk?.digest.bytes ?? null, live_bytes: entry.bytes };
+          return { path: entry.path, file: disk ? projectRelative(index.projectRoot, disk.file) : null, disk_bytes: disk?.digest.bytes ?? null, live_bytes: entry.bytes };
         }),
       } : {}),
       ...(report.missing.length > 0 ? { missing_scripts: report.missing.slice(0, limit) } : {}),

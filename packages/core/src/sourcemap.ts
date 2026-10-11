@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
 
 // Rojo projects keep scripts on disk; sourcemap.json (rojo sourcemap, also what
 // luau-lsp reads) maps every synced instance to its file. With it, Studio paths
@@ -143,6 +143,12 @@ export function buildSourcemapIndex(root: SourcemapNode, sourcemapPath: string, 
 /** True when path is base itself or one of its descendants. */
 export function isUnderPath(path: string, base: string): boolean {
   return base === 'game' || path === base || path.startsWith(`${base}.`) || path.startsWith(`${base}[`);
+}
+
+/** A file inside the project as a relative path with forward slashes, the form Rojo's sourcemap uses on every OS. */
+export function projectRelative(projectRoot: string, file: string): string {
+  const rel = relative(projectRoot, file);
+  return rel.startsWith('..') || isAbsolute(rel) ? file : rel.split(sep).join('/');
 }
 
 /** default.project.json, or the only *.project.json when a project names itself differently. */
@@ -375,9 +381,7 @@ export class SourcemapResolver {
 
   displayFile(file: string): string {
     const index = this.current();
-    if (!index) return file;
-    const rel = relative(index.projectRoot, file);
-    return rel.startsWith('..') ? file : rel;
+    return index ? projectRelative(index.projectRoot, file) : file;
   }
 
   annotateText(text: string): string {

@@ -172,7 +172,7 @@ describe('sourcemap regeneration', () => {
     expect(rojo.calls).toEqual([project]);
     expect(resolver.current()?.generatedFrom).toBe(project);
     expect(resolver.fileForPath(MAIN)).toBe(path.join(root, 'src/server/Main.server.luau'));
-    expect(resolver.displayFile(path.join(root, 'src/shared/Util.luau'))).toBe(path.join('src', 'shared', 'Util.luau'));
+    expect(resolver.displayFile(path.join(root, 'src/shared/Util.luau'))).toBe('src/shared/Util.luau');
 
     expect((await resolver.refresh()).rebuilt).toBeUndefined();
     expect(rojo.calls).toHaveLength(1);
@@ -410,12 +410,12 @@ describe('verify_sync', () => {
     expect(result.all_in_sync).toBe(false);
     expect(result.checked).toBe(4);
     expect(result.sourcemap).toMatchObject({ origin: 'file', scripts: 5 });
-    expect(result.missing_on_disk).toEqual([path.join('src', 'server', 'Removed.server.luau')]);
+    expect(result.missing_on_disk).toEqual(['src/server/Removed.server.luau']);
     expect(result.peers.edit).toEqual({
       in_sync: 2,
       stale: 1,
       missing_in_studio: 1,
-      stale_scripts: [{ path: MAIN, file: path.join('src', 'server', 'Main.server.luau'), disk_bytes: 16, live_bytes: 16 }],
+      stale_scripts: [{ path: MAIN, file: 'src/server/Main.server.luau', disk_bytes: 16, live_bytes: 16 }],
       missing_scripts: [UTIL],
     });
     expect(result.peers.server).toEqual({ in_sync: 4, stale: 0, missing_in_studio: 0 });
