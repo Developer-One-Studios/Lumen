@@ -6,7 +6,7 @@ import { SourcemapResolver } from '../sourcemap.js';
 import { TOOL_HANDLERS } from '../http-server.js';
 import type { ForkHost, PeerTarget } from '../tools/fork-tools.js';
 import { FUZZY_MATCH_LUAU, multiEditLuau } from '../tools/fork-luau.js';
-import { collectOccurrences, diagnosticsFeature, getErrors, splitStack } from '../tools/fork/diagnostics.js';
+import { collectOccurrences, diagnosticsFeature, getErrors, groupKey, splitStack } from '../tools/fork/diagnostics.js';
 import { applySpans, closestWindow, fuzzyMatch, normalizeWhitespace, retryEditIgnoringWhitespace } from '../tools/fork/fuzzy-edit.js';
 
 const has = (binary: string) => !spawnSync(binary, ['--help']).error;
@@ -578,11 +578,31 @@ describe('get_errors', () => {
     const warnings = body(await getErrors(host, 'inst-level', { since: 'all', level: 'warnings' }));
     expect(warnings.groups.map((group: { message: string }) => group.message)).toEqual(['slow']);
     const both = body(await getErrors(host, 'inst-level', { since: 'all', level: 'both', limit: 2 }));
-    expect(both.groups.map((group: { level: string; message: string }) => `${group.level}:${group.message}`)).toEqual(['warning:slow', 'error:one']);
+    expect(both.groups.map((group: { level: string; message: string }) => `${group.level}:${group.message}`)).toEqual(['error:one', 'error:two']);
     expect(both).toMatchObject({ truncated: true, omittedGroups: 2 });
+    const all = body(await getErrors(host, 'inst-level', { since: 'all', level: 'both' }));
+    expect(all.groups.map((group: { level: string; message: string }) => `${group.level}:${group.message}`)).toEqual(['error:one', 'error:two', 'error:three', 'warning:slow']);
     await expect(getErrors(host, 'inst-level', { level: 'fatal' })).rejects.toThrow(/level must be/);
     await expect(getErrors(host, 'inst-level', { since: 'bm90IGEgY3Vyc29y' })).rejects.toThrow(/since must be a cursor/);
     await expect(getErrors(host, 'inst-level', { since: 12 })).rejects.toThrow(/since must be a cursor/);
+  });
+
+  test('numbers in a message do not split a group, but a different script line does', async () => {
+    const entries = [
+      ...Array.from({ length: 20 }, (_, i) => ({ seq: i + 1, ts: i + 1, level: 'WARN', message: `ammo was nil for slot ${i + 1}` })),
+      { seq: 21, ts: 30, level: 'ERR', message: 'Workspace.Gun:12: reload took 0.25 s' },
+      { seq: 22, ts: 31, level: 'ERR', message: 'Workspace.Gun:12: reload took 1.5 s' },
+      { seq: 23, ts: 32, level: 'ERR', message: 'Workspace.Gun:40: reload took 1.5 s' },
+    ];
+    const { host } = logHost([{ role: 'server', peerId: 's' }], { s: entries });
+    const result = body(await getErrors(host, 'inst-numbers', { since: 'all', level: 'both', limit: 3 }));
+    expect(result.groups.map((group: { message: string; count: number; variants?: number }) => [group.message, group.count, group.variants])).toEqual([
+      ['Workspace.Gun:12: reload took 0.25 s', 2, 2],
+      ['Workspace.Gun:40: reload took 1.5 s', 1, undefined],
+      ['ammo was nil for slot 1', 20, 20],
+    ]);
+    expect(result.truncated).toBeUndefined();
+    expect(groupKey('ERR', 'Players.Player12.PlayerGui:7: bad 3')).toBe('ERR\nPlayers.Player#.PlayerGui:7: bad #');
   });
 
   test('a failing peer is reported and keeps its old cursor while the others advance', async () => {

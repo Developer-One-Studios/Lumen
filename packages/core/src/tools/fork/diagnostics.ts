@@ -140,6 +140,11 @@ async function readPeer(host: ForkHost, peer: PeerTarget, prior: number | undefi
   }
 }
 
+// Numbers such as a slot, player or item index vary between repeats of one problem, but a script:line location names a different one.
+export function groupKey(level: Level, message: string): string {
+  return `${level}\n${message.replace(/(:\d+:)|\d+(?:\.\d+)?/g, (match, location: string | undefined) => location ?? '#')}`;
+}
+
 function clip(text: string): string {
   return text.length > MAX_MESSAGE_CHARS ? `${text.slice(0, MAX_MESSAGE_CHARS)}...` : text;
 }
@@ -189,17 +194,18 @@ export async function getErrors(
 
   const wanted = (occurrence: Occurrence) =>
     level === 'both' || (level === 'errors' ? occurrence.level === 'ERR' : occurrence.level === 'WARN');
-  type Group = { first: Occurrence; count: number; peers: Set<string>; lastTs: number; stack: string[]; stacks: Set<string> };
+  type Group = { first: Occurrence; count: number; peers: Set<string>; lastTs: number; stack: string[]; stacks: Set<string>; messages: Set<string> };
   const groups = new Map<string, Group>();
   for (const occurrence of occurrences.sort((a, b) => a.ts - b.ts)) {
     if (!wanted(occurrence)) continue;
-    const key = `${occurrence.level}\n${occurrence.message}`;
+    const key = groupKey(occurrence.level, occurrence.message);
     let group = groups.get(key);
     if (!group) {
-      group = { first: occurrence, count: 0, peers: new Set(), lastTs: occurrence.ts, stack: [], stacks: new Set() };
+      group = { first: occurrence, count: 0, peers: new Set(), lastTs: occurrence.ts, stack: [], stacks: new Set(), messages: new Set() };
       groups.set(key, group);
     }
     group.count++;
+    group.messages.add(occurrence.message);
     group.peers.add(occurrence.role);
     group.lastTs = occurrence.ts;
     if (occurrence.stack.length > 0) {
@@ -208,13 +214,16 @@ export async function getErrors(
     }
   }
 
-  const listed = [...groups.values()].slice(0, limit).map((group) => {
+  // Warnings are often fallout, so a page of them must not push the errors out.
+  const ordered = [...groups.values()].sort((a, b) => Number(a.first.level === 'WARN') - Number(b.first.level === 'WARN'));
+  const listed = ordered.slice(0, limit).map((group) => {
     const stack = group.stack.slice(0, MAX_STACK_LINES).map((line) => resolver.annotateText(clip(line)));
     if (group.stack.length > MAX_STACK_LINES) stack.push(`... ${group.stack.length - MAX_STACK_LINES} more frames`);
     return {
       level: group.first.level === 'ERR' ? 'error' : 'warning',
       message: resolver.annotateText(clip(group.first.message)),
       count: group.count,
+      ...(group.messages.size > 1 ? { variants: group.messages.size } : {}),
       peers: [...group.peers].sort((a, b) => roleRank(a) - roleRank(b)),
       firstTs: group.first.ts,
       lastTs: group.lastTs,
@@ -256,7 +265,7 @@ export const diagnosticsFeature: ForkFeature = {
             default: 'errors',
             description: 'Messages to include, errors by default.',
           },
-          limit: { type: 'number', minimum: 1, maximum: 100, default: 20, description: 'Most distinct messages to return, oldest first.' },
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 20, description: 'Most distinct messages to return, errors first, then oldest first.' },
           instance_id: { type: 'string', description: 'Studio process ID when ambiguous.' },
         },
       },
@@ -275,9 +284,10 @@ export const diagnosticsFeature: ForkFeature = {
 ## Errors and whitespace-tolerant edits
 
 - get_errors groups ERR and WARN output from the edit DataModel, the playtest server, and every client by message text, with a count, the peers that logged it, first and last timestamps, and the stack Roblox printed after it.
+- Numbers in a message do not split a group, so "slot 1" through "slot 20" form one group with variants: 20 and the first message as its text, while a script:line location still has to match.
 - Without since it returns only what each peer logged after the previous get_errors call read it, with or without instance_id, and a peer's first call reads its whole buffer.
 - A retried bare call returns nothing new, so keep the returned cursor and pass it as since to read again from that point, or pass since=all to read every buffer from the start.
-- Groups are ordered by first occurrence, so the first one is usually the root cause and later ones are often fallout.
+- Errors come before warnings and each level is ordered by first occurrence, so the first error is usually the root cause and later ones are often fallout.
 - level=both adds warnings such as infinite yield notices, and totals counts both levels either way.
 - Each peer keeps only about 64 KB of output, so a noisy playtest drops old lines, and lost says how many each peer dropped between calls.
 - A new playtest has new peers, so its server and clients are read from the start of their buffers.
