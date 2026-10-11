@@ -13,6 +13,7 @@ For building and installing, see [install.md](install.md).
 | `studio-plugin` | The Studio plugin in roblox-ts, compiled to Luau and packed into `LumenPlugin.rbxmx`. |
 | `scripts` | Plugin assembly, packaging and the live Studio test harness. |
 | `tests` | Live Studio integration tests and runner self tests. |
+| `bench` | The benchmark against upstream tools, see [benchmark.md](benchmark.md). |
 
 ## Architecture
 
@@ -87,6 +88,7 @@ Lumen's own development on NixOS, with Studio under Vinegar, runs every build, t
 | `dev` | `sandboxed-bash`, `sandboxed-npm` and `sandboxed-node` that can write only this checkout, with `luau`, `luau-compile` and `rojo` on `PATH`. |
 | `server` | The confined server: host network, a private home, this checkout and the Rojo projects read only, and only an artifacts folder writable. |
 | `call` | `lumen-mcp-call <tool> '<json>' ...`, which runs tool calls through a proxy instance and saves images to `artifacts/live`. |
+| `bench` | `lumen-bench`, the benchmark under the server's sandbox, writing reports to `artifacts/bench`. |
 
 Build one with `nix build --impure -f sandbox.nix <attribute> --out-link result-<attribute>`.
 None of this is needed on Windows or macOS.

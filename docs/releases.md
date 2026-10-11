@@ -20,6 +20,11 @@ Every tool below was tested against a live Roblox Studio, including a 127,000 in
 
 See [tools.md](tools.md) for what each one does.
 
+### Benchmark
+
+- `npm run bench` runs seven tasks against a live Studio with the upstream tools and with Lumen's, and reports turns, time, data and the code an agent writes.
+- Lumen halves agent time across them, from 159 s to 80 s, and only Lumen finds the planted leak. See [benchmark.md](benchmark.md).
+
 ### Changed tools
 
 - `execute_luau`, `eval_server_runtime` and `eval_client_runtime` take `timeout_s` and cancel code that never stops yielding, naming the stuck `WaitForChild`.

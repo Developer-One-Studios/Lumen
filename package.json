@@ -22,6 +22,7 @@
     "dev:inspector": "npm run build -w packages/core && tsx packages/lumen-mcp-inspector/src/index.ts",
     "start": "node packages/lumen-mcp/dist/index.js",
     "start:inspector": "node packages/lumen-mcp-inspector/dist/index.js",
+    "bench": "node bench/run.mjs",
     "lint": "eslint packages/*/src/**/*.ts",
     "typecheck": "tsc --noEmit -p packages/core/tsconfig.json",
     "test": "npm test -w packages/core && npm run test:asset-security && npm run test:package-contents && npm run test:runner && npm run test:port-isolation",

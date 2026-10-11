@@ -81,6 +81,21 @@ Based on each project's tool list in October 2026.
 Lumen runs side by side with the official Roblox Studio MCP.
 It uses its own port, plugin file, toolbar and settings, so it can also sit next to an upstream robloxstudio-mcp install.
 
+## Time saved
+
+The [benchmark](docs/benchmark.md) runs seven everyday tasks against a live Studio, once with only the tools robloxstudio-mcp already had and once with Lumen's.
+
+| Task | Agent turns | Agent time |
+| --- | --- | --- |
+| Check a menu on a phone, a tablet and a PC | 7 → 1 | 50.8 s → 10.3 s |
+| Playtest: jump, check it, screenshot, collect errors | 7 → 1 | 43.4 s → 11.8 s |
+| Try an edit, list what changed, undo it | 4 → 4 | 28.2 s → 22.7 s |
+| Check whether spawning enemies leaks memory | 1 → 1, and only Lumen found the leak | 9.2 s → 7.0 s |
+| All seven tasks | 22 → 12 | 159.1 s → 79.8 s |
+
+Across the seven tasks Lumen halves the agent's time and cuts the code it has to write from 7,289 to 1,218 characters.
+The baseline's code was written ahead of time with full knowledge of the test scene, so real savings are larger.
+
 ## Quick start
 
 You need Node.js 22 or newer, Git, and Roblox Studio.
@@ -181,7 +196,7 @@ Details and how to report a problem are in [SECURITY.md](SECURITY.md).
 
 | Topic | Guides |
 | --- | --- |
-| Using Lumen | [Install](docs/install.md) · [Tool reference](docs/tools.md) · [Configuration](docs/configuration.md) · [Large inputs](docs/large-inputs.md) · [Creator Store assets](docs/creator-store-assets.md) |
+| Using Lumen | [Install](docs/install.md) · [Tool reference](docs/tools.md) · [Configuration](docs/configuration.md) · [Large inputs](docs/large-inputs.md) · [Creator Store assets](docs/creator-store-assets.md) · [Benchmark](docs/benchmark.md) |
 | Working on Lumen | [Development](docs/development.md) · [Building from source](docs/building-from-source.md) · [Token budgets](docs/token-efficiency.md) · [API migration](docs/deprecated-api.md) |
 | History | [Lumen releases](docs/releases.md) · [Upstream changelog](CHANGELOG.md) |
 
