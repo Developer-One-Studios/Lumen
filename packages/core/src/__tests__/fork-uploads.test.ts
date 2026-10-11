@@ -6,7 +6,7 @@ import { OpenCloudClient } from '../opencloud-client.js';
 import { RobloxCookieClient } from '../roblox-cookie-client.js';
 import type { RobloxStudioTools } from '../tools/index.js';
 import type { PeerTarget } from '../tools/fork-tools.js';
-import { planUploads, soundsLuau, uploadAll, uploadsFeature, type UploadRow } from '../tools/fork/uploads.js';
+import { animationSourcesLuau, planUploads, soundsLuau, uploadAll, uploadsFeature, type UploadRow } from '../tools/fork/uploads.js';
 
 type Upload = { file: string; type: string; name: string; description?: string; userId?: string; groupId?: string };
 type Call = { endpoint: string; code: string; peerId: string };
@@ -87,12 +87,21 @@ function fakeTools(options: {
   const uploads: Upload[] = [];
   const calls: Call[] = [];
   let next = 1000;
+  const exportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fork-uploads-export-'));
+  const exports: Array<{ paths: string[]; output: string }> = [];
   const tools = {
     uploadAsset: async (file: string, type: string, name: string, description?: string, userId?: string, groupId?: string) => {
       const call = { file, type, name, description, userId, groupId };
       uploads.push(call);
       options.log?.push(`upload ${path.basename(file)}`);
       return text(options.upload ? await options.upload(call) : { done: true, response: { assetId: String(next++) } });
+    },
+    exportRbxm: async (paths: string[], output: string) => {
+      exports.push({ paths, output });
+      const file = path.join(exportDir, output);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'rbxm');
+      return text({ bytes_written: 4, instance_count: 1, output_path: file });
     },
     forkHost: {
       peerTargets: async (target: string) => (options.peers ?? [{ role: 'edit', peerId: 'e' }]).filter((peer) => peer.role === target),
@@ -104,10 +113,10 @@ function fakeTools(options: {
       },
     },
   } as unknown as RobloxStudioTools;
-  return { tools, uploads, calls };
+  return { tools, uploads, calls, exports };
 }
 
-function argsOf(code: string): { parent: string; sounds: Array<{ name: string; assetId: string }> } {
+function argsOf(code: string): { parent: string; sounds: Array<{ name: string; assetId: string; class?: string }> } {
   const match = /JSONDecode\(\[(=*)\[\n([\s\S]*?)\]\1\]\)/.exec(code);
   return JSON.parse(match![2]);
 }
@@ -158,6 +167,16 @@ describe('upload_assets planning', () => {
     expect(rows[0]).toMatchObject({ name: 'SFX_boom', status: 'pending' });
     expect(rows[1]).toMatchObject({ status: 'skipped', error: '.glb uploads as Model, not Audio' });
     expect(rows[2].name).toHaveLength(50);
+  });
+
+  test('asset_type Animation takes .rbxm and .rbxmx as animations and nothing else', () => {
+    const dir = folder({ 'wave.rbxm': 'x', 'nod.rbxmx': 'x', 'icon.png': 'x', 'tree.fbx': 'x' });
+    const rows = planUploads({ files: ['wave.rbxm', 'nod.rbxmx', 'icon.png'].map((name) => path.join(dir, name)), asset_type: 'Animation' });
+    expect(rows[0]).toMatchObject({ type: 'Animation', status: 'pending', name: 'wave' });
+    expect(rows[1]).toMatchObject({ type: 'Animation', status: 'pending' });
+    expect(rows[2]).toMatchObject({ status: 'skipped', error: '.png cannot upload as Animation, only .rbxm and .rbxmx can' });
+    expect(planUploads({ directory: dir, asset_type: 'Animation' }).map((row) => path.basename(row.file))).toEqual(['nod.rbxmx', 'wave.rbxm']);
+    expect(planUploads({ files: [path.join(dir, 'wave.rbxm')] })[0].type).toBe('Model');
   });
 
   test('relative paths resolve inside the artifact folder and duplicates collapse', () => {
@@ -334,6 +353,55 @@ describe('upload_assets retries', () => {
 });
 
 describe('upload_assets handler', () => {
+  test('animations_from exports each clip, uploads it as an Animation and creates Animations under create_in', async () => {
+    const created: Array<{ name: string; assetId: string; class?: string }> = [];
+    const { tools, uploads, exports } = fakeTools({
+      reply: (call) => {
+        if (call.code.includes('AnimationClip')) {
+          return ok({
+            sequences: [
+              { path: 'game.ServerStorage.Rig.AnimSaves.Wave', name: 'Wave' },
+              { path: 'game.ServerStorage.Rig.AnimSaves["Wave"]', name: 'Wave' },
+              { path: 'game.ServerStorage.Rig.AnimSaves.Slash', name: 'Slash' },
+            ],
+            missing: ['game.ServerStorage.Gone'],
+          });
+        }
+        const args = argsOf(call.code);
+        created.push(...args.sounds);
+        return ok({ parent: args.parent, sounds: args.sounds.map((entry) => ({ path: `${args.parent}.${entry.name}`, updated: false })) });
+      },
+    });
+    const result = parse(await handler(tools, {
+      animations_from: ['game.ServerStorage.Rig.AnimSaves', 'game.ServerStorage.Gone'],
+      group_id: '9',
+      name_prefix: 'Anim_',
+      create_in: 'game.ReplicatedStorage.Animations',
+      manifest: false,
+    }));
+    expect(exports.map((entry) => path.basename(entry.output))).toEqual(['Wave.rbxm', 'Wave_2.rbxm', 'Slash.rbxm']);
+    expect(uploads.map((call) => [call.type, call.name, call.groupId])).toEqual([
+      ['Animation', 'Anim_Wave', '9'], ['Animation', 'Anim_Wave', '9'], ['Animation', 'Anim_Slash', '9'],
+    ]);
+    expect(created).toEqual([
+      { name: 'Wave', assetId: '1000', class: 'Animation' },
+      { name: 'Wave_2', assetId: '1001', class: 'Animation' },
+      { name: 'Slash', assetId: '1002', class: 'Animation' },
+    ]);
+    expect(result.files[0]).toMatchObject({ type: 'Animation', source: 'game.ServerStorage.Rig.AnimSaves.Wave', animation: 'game.ReplicatedStorage.Animations.Wave' });
+    expect(result.missing_roots).toEqual(['game.ServerStorage.Gone']);
+    expect(result.totals).toMatchObject({ files: 3, uploaded: 3 });
+  });
+
+  test('animations_from with nothing to upload fails before any upload', async () => {
+    const { tools, uploads } = fakeTools({ reply: () => ok({ sequences: [], missing: ['game.Nope'] }) });
+    await expect(handler(tools, { animations_from: ['game.Nope'] })).rejects.toThrow('animations_from not found: game.Nope');
+    const empty = fakeTools({ reply: () => ok({ sequences: [], missing: [] }) });
+    await expect(handler(empty.tools, { animations_from: ['game.ServerStorage'] })).rejects.toThrow(/No KeyframeSequence or CurveAnimation/);
+    await expect(handler(empty.tools, {})).rejects.toThrow('Pass files, directory or animations_from.');
+    expect(uploads).toEqual([]);
+  });
+
   test('honours the concurrency limit and caps it at 6', async () => {
     const files = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`s${index}.ogg`, 'x']));
     const dir = folder(files);
@@ -499,6 +567,8 @@ const compiler = spawnSync('luau-compile', ['--help']).error ? undefined : 'luau
 const SNIPPETS: Record<string, string> = {
   soundsCheck: soundsLuau({ parent: 'game.SoundService', sounds: [] }),
   soundsPlace: soundsLuau({ parent: 'game.SoundService["SFX ]]"]', sounds: [{ name: 'hit', assetId: '123' }, { name: 'hit_2', assetId: '456' }] }),
+  animationsPlace: soundsLuau({ parent: 'game.ReplicatedStorage.Animations', sounds: [{ name: 'Wave', assetId: '789', class: 'Animation' }] }),
+  animationSources: animationSourcesLuau({ roots: ['game.ServerStorage.Rig.AnimSaves'] }),
 };
 
 describe('upload_assets Luau', () => {

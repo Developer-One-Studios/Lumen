@@ -6,7 +6,7 @@ import { withArgs } from '../fork-luau.js';
 import { clamp, luauValue, parseResult, toolText, type PeerTarget } from '../fork-tools.js';
 import type { ForkFeature, ForkHandler } from './feature.js';
 
-type UploadType = 'Audio' | 'Model' | 'Decal';
+type UploadType = 'Audio' | 'Model' | 'Decal' | 'Animation';
 
 // Open Cloud Assets API formats, which do not include .obj.
 const EXTENSION_TYPES: Record<string, UploadType> = {
@@ -14,7 +14,9 @@ const EXTENSION_TYPES: Record<string, UploadType> = {
   fbx: 'Model', gltf: 'Model', glb: 'Model', rbxm: 'Model', rbxmx: 'Model',
   png: 'Decal', jpg: 'Decal', jpeg: 'Decal', bmp: 'Decal', tga: 'Decal',
 };
-const UPLOAD_TYPES: UploadType[] = ['Audio', 'Model', 'Decal'];
+const UPLOAD_TYPES: UploadType[] = ['Audio', 'Model', 'Decal', 'Animation'];
+// A saved KeyframeSequence and a model share these extensions, so animations are only chosen with asset_type.
+const ANIMATION_EXTENSIONS = new Set(['rbxm', 'rbxmx']);
 
 // Roblox documents a 20 MB cap without saying which MB, so the larger reading never refuses a file Roblox would take.
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -43,6 +45,9 @@ export interface UploadRow {
   imageId?: string;
   imageNote?: string;
   sound?: string;
+  animation?: string;
+  /** Studio path of the AnimationClip an animations_from row was exported from. */
+  source?: string;
 }
 
 // The image id behind a Decal can only be looked up through a connected Studio.
@@ -50,7 +55,7 @@ const IMAGE_NOTE = 'Image id unknown because Studio was not connected or the ima
 
 export type UploadOnce = (row: UploadRow) => Promise<{ assetId: string; imageId?: string }>;
 
-type SoundEntry = { name: string; assetId: string };
+type SoundEntry = { name: string; assetId: string; class?: 'Sound' | 'Animation' };
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -158,7 +163,9 @@ export function planUploads(body: Record<string, unknown>): UploadRow[] {
     const requested = strings(body.extensions).map((extension) => extension.replace(/^\./, '').toLowerCase());
     const extensions = new Set(requested.length > 0
       ? requested
-      : Object.keys(EXTENSION_TYPES).filter((extension) => assetType === undefined || EXTENSION_TYPES[extension] === assetType));
+      : assetType === 'Animation'
+        ? [...ANIMATION_EXTENSIONS]
+        : Object.keys(EXTENSION_TYPES).filter((extension) => assetType === undefined || EXTENSION_TYPES[extension] === assetType));
     const directory = resolveInput(body.directory);
     listDirectory(directory, extensions, body.recursive === true, paths);
     searched = `No .${[...extensions].join(', .')} files in ${directory}`;
@@ -170,12 +177,13 @@ export function planUploads(body: Record<string, unknown>): UploadRow[] {
   const prefix = typeof body.name_prefix === 'string' ? body.name_prefix : '';
   return unique.map((file): UploadRow => {
     const extension = extensionOf(file);
-    const type = EXTENSION_TYPES[extension] ?? null;
+    const type = assetType === 'Animation' && ANIMATION_EXTENSIONS.has(extension) ? 'Animation' : EXTENSION_TYPES[extension] ?? null;
     const name = `${prefix}${path.basename(file, path.extname(file))}`.slice(0, DISPLAY_NAME_LIMIT);
     const row: UploadRow = { file, name, type, assetId: null, status: 'pending', error: null };
     let problem: string | undefined;
     if (extension === 'obj') problem = 'Open Cloud does not accept .obj, convert it to .fbx or .glb';
     else if (type === null) problem = `unsupported extension .${extension}, use ${Object.keys(EXTENSION_TYPES).join(', ')}`;
+    else if (assetType === 'Animation' && type !== 'Animation') problem = `.${extension} cannot upload as Animation, only .rbxm and .rbxmx can`;
     else if (assetType !== undefined && type !== assetType) problem = `.${extension} uploads as ${type}, not ${assetType}`;
     else problem = check(file, extension);
     return problem === undefined ? row : { ...row, status: 'skipped', error: problem };
@@ -271,12 +279,24 @@ pcall(function() recording = ChangeHistoryService:TryBeginRecording("MCP: upload
 local results = {}
 for index, entry in ARGS.sounds do
 	local ok, result = pcall(function()
-		local existing = parent:FindFirstChild(entry.name)
-		local sound = if existing ~= nil and existing:IsA("Sound") then existing else Instance.new("Sound")
-		sound.Name = entry.name
-		sound.SoundId = "rbxassetid://" .. entry.assetId
-		sound.Parent = parent
-		return { path = pathOf(sound), updated = sound == existing }
+		local class = entry.class or "Sound"
+		-- Matched by name and class, so a Sound and an Animation that share a name stay apart.
+		local existing = nil
+		for _, child in parent:GetChildren() do
+			if child.Name == entry.name and child.ClassName == class then
+				existing = child
+				break
+			end
+		end
+		local made = existing or Instance.new(class)
+		made.Name = entry.name
+		if class == "Animation" then
+			made.AnimationId = "rbxassetid://" .. entry.assetId
+		else
+			made.SoundId = "rbxassetid://" .. entry.assetId
+		end
+		made.Parent = parent
+		return { path = pathOf(made), updated = made == existing }
 	end)
 	results[index] = if ok then result else { error = tostring(result) }
 end
@@ -285,6 +305,75 @@ if recording then
 end
 return { parent = pathOf(parent), sounds = results, undoable = recording ~= nil }
 `, args);
+}
+
+export function animationSourcesLuau(args: { roots: string[] }): string {
+  return withArgs(String.raw`
+local found, missing = {}, {}
+for _, root in ARGS.roots do
+	local instance = resolve(root)
+	if instance == nil then
+		table.insert(missing, root)
+	else
+		local candidates = instance:GetDescendants()
+		table.insert(candidates, 1, instance)
+		for _, item in candidates do
+			-- AnimationClip covers both KeyframeSequence and CurveAnimation, the two kinds Roblox accepts as animations.
+			if item:IsA("AnimationClip") then
+				table.insert(found, { path = pathOf(item), name = item.Name })
+			end
+		end
+	end
+end
+return { sequences = found, missing = missing }
+`, args);
+}
+
+interface ExportedAnimations {
+  rows: UploadRow[];
+  names: Map<UploadRow, string>;
+  missing: string[];
+}
+
+// Each clip is saved as its own .rbxm in the artifact folder, because Open Cloud takes one animation per file.
+async function exportAnimations(
+  tools: RobloxStudioTools,
+  peer: PeerTarget,
+  roots: string[],
+  prefix: string,
+  room: number,
+  instanceId: string | undefined,
+): Promise<ExportedAnimations> {
+  const listed = luauValue(await tools.forkHost.requestPeer(EXECUTE, { code: animationSourcesLuau({ roots }) }, peer.peerId, 30_000));
+  const sequences = (listed.sequences as Array<{ path: string; name: string }> | undefined) ?? [];
+  const missing = (listed.missing as string[] | undefined) ?? [];
+  if (sequences.length > room) throw new Error(`${sequences.length} animations found, but only ${room} more files fit in one call.`);
+  const folder = `uploads/animations-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const used = new Set<string>();
+  const rows: UploadRow[] = [];
+  const names = new Map<UploadRow, string>();
+  for (const sequence of sequences) {
+    const base = sequence.name.replace(/[^\w.-]+/g, '_') || 'animation';
+    let stem = base;
+    for (let count = 2; used.has(stem.toLowerCase()); count++) stem = `${base}_${count}`;
+    used.add(stem.toLowerCase());
+    const row: UploadRow = {
+      file: '', name: `${prefix}${sequence.name}`.slice(0, DISPLAY_NAME_LIMIT), type: 'Animation',
+      assetId: null, status: 'pending', error: null, source: sequence.path,
+    };
+    try {
+      const exported = parseResult(await tools.exportRbxm([sequence.path], `${folder}/${stem}.rbxm`, 'edit', instanceId));
+      if (typeof exported.output_path !== 'string') throw new Error('export returned no file');
+      row.file = exported.output_path;
+      const problem = check(row.file, 'rbxm');
+      if (problem !== undefined) Object.assign(row, { status: 'skipped', error: problem });
+    } catch (error) {
+      Object.assign(row, { status: 'skipped', error: `export failed: ${message(error)}` });
+    }
+    rows.push(row);
+    names.set(row, sequence.name);
+  }
+  return { rows, names, missing };
 }
 
 async function editPeer(tools: RobloxStudioTools, instanceId: string | undefined): Promise<PeerTarget> {
@@ -299,8 +388,8 @@ async function placeSounds(tools: RobloxStudioTools, peer: PeerTarget, parent: s
 
 // Files sharing a stem would otherwise land on one Sound, the later overwriting the earlier.
 // Every stem is reserved first, so hit.wav and hit.ogg never take the name a real hit_2.wav needs.
-function soundNames(rows: UploadRow[]): Map<UploadRow, string> {
-  const stems = rows.map((row) => path.basename(row.file, path.extname(row.file)));
+function soundNames(rows: UploadRow[], labels?: Map<UploadRow, string>): Map<UploadRow, string> {
+  const stems = rows.map((row) => labels?.get(row) ?? path.basename(row.file, path.extname(row.file)));
   const used = new Set(stems);
   const claimed = new Set<string>();
   const names = new Map<UploadRow, string>();
@@ -319,19 +408,34 @@ function soundNames(rows: UploadRow[]): Map<UploadRow, string> {
   return names;
 }
 
-async function createSounds(tools: RobloxStudioTools, peer: PeerTarget | undefined, parent: string, rows: UploadRow[]): Promise<Record<string, unknown>> {
-  const audio = rows.filter((row) => row.status === 'uploaded' && row.type === 'Audio');
-  if (!peer || audio.length === 0) return { created: 0, note: 'No audio was uploaded, so no Sounds were added.' };
-  // Named over every planned audio file, so a Sound keeps its name when another upload in the call fails.
-  const names = soundNames(rows.filter((row) => row.type === 'Audio'));
+async function createSounds(
+  tools: RobloxStudioTools,
+  peer: PeerTarget | undefined,
+  parent: string,
+  rows: UploadRow[],
+  labels: Map<UploadRow, string>,
+): Promise<Record<string, unknown>> {
+  const audio = rows.filter((row) => row.status === 'uploaded' && (row.type === 'Audio' || row.type === 'Animation'));
+  if (!peer || audio.length === 0) return { created: 0, note: 'No audio or animation was uploaded, so nothing was added.' };
+  // Named over every planned file of the kind, so an instance keeps its name when another upload in the call fails.
+  const names = new Map([
+    ...soundNames(rows.filter((row) => row.type === 'Audio')),
+    ...soundNames(rows.filter((row) => row.type === 'Animation'), labels),
+  ]);
   try {
-    const placed = await placeSounds(tools, peer, parent, audio.map((row) => ({ name: names.get(row)!, assetId: row.assetId! })));
+    const entries = audio.map((row): SoundEntry => ({
+      name: names.get(row)!,
+      assetId: row.assetId!,
+      ...(row.type === 'Animation' ? { class: 'Animation' as const } : {}),
+    }));
+    const placed = await placeSounds(tools, peer, parent, entries);
     const results = (placed.sounds as Array<{ path?: string; updated?: boolean; error?: string } | undefined>) ?? [];
     const errors: Array<{ file: string; error: string }> = [];
     audio.forEach((row, index) => {
       const result = results[index];
-      if (typeof result?.path === 'string') row.sound = result.path;
-      else errors.push({ file: row.file, error: result?.error ?? 'no result' });
+      if (typeof result?.path !== 'string') errors.push({ file: row.file, error: result?.error ?? 'no result' });
+      else if (row.type === 'Animation') row.animation = result.path;
+      else row.sound = result.path;
     });
     return {
       parent: placed.parent,
@@ -341,18 +445,42 @@ async function createSounds(tools: RobloxStudioTools, peer: PeerTarget | undefin
       ...(errors.length > 0 ? { errors } : {}),
     };
   } catch (error) {
-    return { error: `Sounds were not added: ${message(error)}` };
+    return { error: `Sounds and Animations were not added: ${message(error)}` };
   }
 }
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item !== '') : [];
+}
+
 const uploadAssets: ForkHandler = async (tools, body, context) => {
-  const rows = planUploads(body);
+  const instanceId = body.instance_id as string | undefined;
+  const roots = stringList(body.animations_from);
+  const wantsFiles = stringList(body.files).length > 0 || (typeof body.directory === 'string' && body.directory !== '');
+  if (!wantsFiles && roots.length === 0) throw new Error('Pass files, directory or animations_from.');
+  const rows = wantsFiles ? planUploads(body) : [];
   const createIn = typeof body.create_in === 'string' && body.create_in !== '' ? body.create_in : undefined;
 
-  // Checked before uploading, so a wrong path or a missing Studio costs no upload quota.
   let peer: PeerTarget | undefined;
-  if (createIn && rows.some((row) => row.status === 'pending' && row.type === 'Audio')) {
-    peer = await editPeer(tools, body.instance_id as string | undefined);
+  let labels = new Map<UploadRow, string>();
+  let missingRoots: string[] = [];
+  if (roots.length > 0) {
+    peer = await editPeer(tools, instanceId);
+    const prefix = typeof body.name_prefix === 'string' ? body.name_prefix : '';
+    const exported = await exportAnimations(tools, peer, roots, prefix, MAX_FILES - rows.length, instanceId);
+    rows.push(...exported.rows);
+    labels = exported.names;
+    missingRoots = exported.missing;
+    if (rows.length === 0) {
+      throw new Error(missingRoots.length === roots.length
+        ? `animations_from not found: ${missingRoots.join(', ')}`
+        : `No KeyframeSequence or CurveAnimation under ${roots.join(', ')}.`);
+    }
+  }
+
+  // Checked before uploading, so a wrong path or a missing Studio costs no upload quota.
+  if (createIn && rows.some((row) => row.status === 'pending' && (row.type === 'Audio' || row.type === 'Animation'))) {
+    peer ??= await editPeer(tools, instanceId);
     await placeSounds(tools, peer, createIn, []);
   }
 
@@ -364,7 +492,7 @@ const uploadAssets: ForkHandler = async (tools, body, context) => {
 
   let sounds: Record<string, unknown> | undefined;
   // A cancelled client never reads the result, so it would not learn about the edit.
-  if (createIn) sounds = context?.signal?.aborted ? { created: 0, note: 'Cancelled, so no Sounds were added.' } : await createSounds(tools, peer, createIn, rows);
+  if (createIn) sounds = context?.signal?.aborted ? { created: 0, note: 'Cancelled, so no Sounds were added.' } : await createSounds(tools, peer, createIn, rows, labels);
 
   const count = (status: UploadRow['status']) => rows.filter((row) => row.status === status).length;
   const totals = {
@@ -390,6 +518,7 @@ const uploadAssets: ForkHandler = async (tools, body, context) => {
     totals,
     files: rows,
     ...(sounds ? { sounds } : {}),
+    ...(missingRoots.length > 0 ? { missing_roots: missingRoots } : {}),
     ...(manifest ? { manifest } : {}),
     ...(manifestError ? { manifestError } : {}),
   });
@@ -402,7 +531,7 @@ export const uploadsFeature: ForkFeature = {
       name: 'upload_assets',
       category: 'write',
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-      description: 'Use to upload many audio, model or image files to Roblox, optionally adding Sounds in Studio.',
+      description: 'Use to upload many audio, model, image or animation files to Roblox, optionally adding Sounds or Animations in Studio.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -410,13 +539,14 @@ export const uploadsFeature: ForkFeature = {
           directory: { type: 'string', description: 'Folder to upload from.' },
           extensions: { type: 'array', items: { type: 'string' }, description: 'Extensions to pick, default all.' },
           recursive: { type: 'boolean', description: 'Include subfolders.' },
+          animations_from: { type: 'array', items: { type: 'string' }, description: 'Studio paths whose KeyframeSequences upload as Animations.' },
           asset_type: { type: 'string', enum: UPLOAD_TYPES, description: 'Only accept this type.' },
           name_prefix: { type: 'string', description: 'Asset name prefix.' },
           description: { type: 'string', description: 'Asset description.' },
           user_id: { type: 'string', description: 'Creator user ID.' },
           group_id: { type: 'string', description: 'Creator group ID, wins over user_id.' },
           concurrency: { type: 'number', minimum: 1, maximum: 6, default: 3, description: 'Parallel uploads.' },
-          create_in: { type: 'string', description: 'Studio path to get a Sound per audio file.' },
+          create_in: { type: 'string', description: 'Studio path that gets a Sound or Animation per upload.' },
           manifest: { type: 'boolean', description: 'Write a JSON manifest, default true.' },
           instance_id: { type: 'string', description: 'Studio process ID when ambiguous.' },
         },
@@ -435,6 +565,9 @@ export const uploadsFeature: ForkFeature = {
 
 - upload_assets uploads every path in files plus the files in directory that match extensions, with subfolders only when recursive is true, up to ${MAX_FILES} per call.
 - The type follows the extension: mp3, ogg, wav and flac are Audio, fbx, glb, gltf, rbxm and rbxmx are Model, and png, jpg, jpeg, bmp and tga are Decal.
+- asset_type Animation uploads .rbxm and .rbxmx files as Animations instead of Models, since a saved KeyframeSequence and a model share those extensions.
+- animations_from takes Studio paths, such as a rig's AnimSaves, and exports every KeyframeSequence and CurveAnimation under them to its own .rbxm in the artifact folder before uploading it as an Animation. It works alone or together with files.
+- Animations used by a group's experience must belong to that group, so pass group_id for team games, or they will not load in live servers.
 - Open Cloud does not accept .obj, so convert it to .fbx or .glb first.
 - A .gltf that points at separate buffer or texture files cannot be uploaded alone, so prefer .glb.
 - Files over 20 MB, unknown extensions, and files that do not match asset_type are skipped before any upload.
@@ -450,7 +583,7 @@ export const uploadsFeature: ForkFeature = {
 - Audio is limited to 10 uploads a month, or 100 with ID verification, so count the files before uploading a large folder.
 - New audio still goes through moderation, so a Sound can stay silent until Roblox approves it.
 - Decal rows also carry imageId, the image asset that ImageLabel.Image needs. Looking it up needs a connected Studio, and without one the row has imageNote instead.
-- create_in adds one Sound per uploaded audio file in the edit DataModel, named after the file and pointing at rbxassetid://<id>, as one undo step named MCP: upload_assets.
+- create_in adds one Sound per uploaded audio file and one Animation per uploaded animation in the edit DataModel, named after the file or the exported clip and pointing at rbxassetid://<id>, as one undo step named MCP: upload_assets.
 - Audio files that share a name get Sounds named name_2, name_3 and so on, numbered over every audio file in the call.
 - Rerun the same set of files to update the same Sounds, because a smaller set can number them differently.
 - An existing Sound with the same name under create_in gets the new SoundId instead of a duplicate.

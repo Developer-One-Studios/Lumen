@@ -25,7 +25,7 @@ It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3
 | Errors | `get_errors` | A deduplicated error and warning digest from every peer since the last call. |
 | Networking | `replication_diff`, `fuzz_remotes` | Compare an instance between server and clients, and fire malformed or spammed payloads at remotes. |
 | Tests | `run_tests`, `cloud_luau` | Run the place's test runner in a playtest, or run Luau headlessly on a Roblox cloud server. |
-| Assets | `upload_assets`, `audit_assets`, `datastore_read` | Batch uploads with retries and Sounds created in Studio, a check for assets that fail to load live, and read only DataStore access. |
+| Assets | `upload_assets`, `audit_assets`, `datastore_read` | Batch uploads of audio, models, images and animations, straight from a rig's AnimSaves, with Sounds and Animations created in Studio, a check for assets that fail to load live, and read only DataStore access. |
 | Editing | `multi_edit` | Several edits to one script as one atomic, undoable step. |
 
 Lumen also improves a few upstream tools.
@@ -49,7 +49,7 @@ Based on each project's tool list in October 2026.
 | Rojo sync checks and `file:line` mapping | Yes | No | No |
 | Replication diff and remote fuzzing | Yes | No | No |
 | Headless cloud Luau | Yes | No | No |
-| Batch asset upload | Audio, models and images | One file at a time | Images |
+| Batch asset upload | Audio, models, images and animations | One file at a time | Images |
 | Atomic multi edit | Yes | No | Yes |
 | Character walking | Yes, with stall reports | No | Yes |
 | AI mesh, texture and material generation | No | Model staging | Yes |

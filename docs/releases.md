@@ -16,6 +16,7 @@ Every tool below was tested against a live Roblox Studio, including a 127,000 in
 - Rojo: `resolve_source` and `verify_sync`.
 - Diagnostics: `get_errors`, `replication_diff` and `fuzz_remotes`.
 - Cloud and assets: `cloud_luau`, `upload_assets`, `audit_assets` and `datastore_read`.
+- `upload_assets` also uploads animations, either `.rbxm` files or every clip under a Studio path such as `AnimSaves`, and creates the matching Animation instances.
 
 See [tools.md](tools.md) for what each one does.
 

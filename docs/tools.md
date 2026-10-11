@@ -238,13 +238,16 @@ Needs `ROBLOX_OPEN_CLOUD_API_KEY` with the luau execution scopes for that experi
 
 ### `upload_assets`
 
-Uploads many audio, model and image files with retries and a manifest.
+Uploads many audio, model, image and animation files with retries and a manifest.
 
 - `files`, or `directory` with `extensions` and `recursive`.
+- `asset_type: "Animation"` uploads `.rbxm` and `.rbxmx` files as animations instead of models.
+- `animations_from`: Studio paths, such as a rig's `AnimSaves`. Every KeyframeSequence and CurveAnimation under them is exported and uploaded as an animation, so animations never need publishing one by one from the Animation Editor.
 - `group_id` or `user_id`, `name_prefix` and `description`.
-- `create_in`: a Studio path that gets one Sound per audio file, as one undo step.
+- `create_in`: a Studio path that gets one Sound per audio file and one Animation per animation, pointing at the new ids, as one undo step.
 - `concurrency`, up to 6.
 
+Animations a group's game uses must belong to that group, so upload them with `group_id`.
 An upload whose status cannot be confirmed is reported as `unconfirmed` with its operation id and never retried, because a retry could create a duplicate asset.
 The manifest is written under the artifacts folder.
 
