@@ -281,6 +281,8 @@ export class ForkTools {
     // A class that first appears mid-run is as telling as one that grows.
     const classes = new Set(measured.flatMap((snap) => Object.keys((snap.classes as Record<string, number>) ?? {})));
     for (const cls of classes) add(`class:${cls}`, (snap) => (snap.classes as Record<string, number>)[cls] ?? 0);
+    const sources = new Set(measured.flatMap((snap) => Object.keys((snap.unparentedBy as Record<string, number>) ?? {})));
+    for (const source of sources) add(`unparented:${source}`, (snap) => (snap.unparentedBy as Record<string, number> | undefined)?.[source] ?? 0);
     for (const expression of watch) add(`watch:${expression}`, (snap) => (snap.watch as Record<string, unknown>)?.[expression]);
 
     const rounds = measured.length - 1;

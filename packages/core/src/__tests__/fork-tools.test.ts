@@ -86,6 +86,33 @@ describe('fork tool plumbing', () => {
     expect(calls.find((call) => call.code.startsWith('local values'))!.code).toContain('return (#cache.entries)');
   });
 
+  test('leak_check names the script and class that keep unparented instances alive', async () => {
+    let round = 0;
+    const { host } = fakeHost([{ role: 'server', peerId: 's' }], (call) => {
+      if (call.endpoint === '/api/eval-runtime') {
+        round += 1;
+        return { success: true };
+      }
+      return ok({
+        totalMb: 100,
+        instanceCount: 5000,
+        tags: {},
+        classes: { Part: 100 },
+        unparentedInstances: 1 + round * 301,
+        unparentedBy: {
+          'ServerStorage.Enemies:Folder': round * 300,
+          'ServerStorage.Enemies:Model': round,
+          'StarterPlayer.PlayerModule.CommonUtils.PlayerModuleEventBus:BindableEvent': 1,
+        },
+      });
+    });
+    const result = body(await new ForkTools(host).leakCheck({ action: 'spawnEnemy()', iterations: 5, settle_ms: 0 }));
+    const metrics = result.growing.map((row: { metric: string }) => row.metric);
+    expect(metrics).toEqual(expect.arrayContaining(['unparentedInstances', 'unparented:ServerStorage.Enemies:Folder', 'unparented:ServerStorage.Enemies:Model']));
+    expect(metrics).not.toContain('unparented:StarterPlayer.PlayerModule.CommonUtils.PlayerModuleEventBus:BindableEvent');
+    expect(result.growing.find((row: { metric: string }) => row.metric === 'unparented:ServerStorage.Enemies:Folder').perIteration).toBe(300);
+  });
+
   test('replication_diff flags values that differ beyond tolerance and missing instances', async () => {
     const peers = [{ role: 'server', peerId: 's' }, { role: 'client-1', peerId: 'c1' }, { role: 'client-2', peerId: 'c2' }];
     const { host } = fakeHost([{ role: 'edit', peerId: 'e' }, ...peers], (call) => {

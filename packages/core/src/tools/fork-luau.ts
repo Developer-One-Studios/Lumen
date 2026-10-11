@@ -536,18 +536,25 @@ for _, instance in game:GetDescendants() do
 	classes[instance.ClassName] = (classes[instance.ClassName] or 0) + 1
 end
 local unparented = nil
+local unparentedBy = nil
 local okService, scene = pcall(game.GetService, game, "SceneAnalysisService")
 if okService and scene then
 	local ok, tree = pcall(function() return (scene :: any):GetUnparentedInstancesAsync() end)
-	if ok and type(tree) == "table" then
-		local nodes = 0
-		local function walk(node)
-			if type(node) ~= "table" then return end
-			if node.Children == nil or #node.Children == 0 then nodes += 1 end
-			for _, child in node.Children or {} do walk(child) end
+	-- Size counts instances, grouped under the script that created them and then by class.
+	if ok and type(tree) == "table" and type(tree.Size) == "number" then
+		unparented = tree.Size
+		unparentedBy = {}
+		for _, source in tree.Children or {} do
+			if type(source) ~= "table" or type(source.Size) ~= "number" then continue end
+			local classes = 0
+			for _, class in source.Children or {} do
+				if type(class) == "table" and type(class.Size) == "number" then
+					unparentedBy[tostring(source.Name) .. ":" .. tostring(class.Name)] = class.Size
+					classes += 1
+				end
+			end
+			if classes == 0 then unparentedBy[tostring(source.Name)] = source.Size end
 		end
-		walk(tree)
-		unparented = nodes
 	end
 end
 return {
@@ -556,6 +563,7 @@ return {
 	tags = tags,
 	classes = classes,
 	unparentedInstances = unparented,
+	unparentedBy = unparentedBy,
 }
 `;
 

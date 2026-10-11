@@ -43,6 +43,8 @@ Use it to turn "maybe it's the particles" into a number.
 ### `leak_check`
 
 Runs an action repeatedly and reports what keeps growing between rounds: memory tags, instance counts per class, instances detached from the DataModel, or values you watch.
+Detached instances are counted per script that created them and per class, so a leak names its source, such as `unparented:ServerScriptService.Spawner:Model`.
+Roblox refreshes memory tags and `Stats.InstanceCount` only every few seconds, so keep `settle_ms` near its 1500 default when you rely on them.
 
 - `action`: Luau run in the game VM once per round, such as spawning and despawning an enemy.
 - `iterations` and `settle_ms`: rounds and the wait before each measurement.

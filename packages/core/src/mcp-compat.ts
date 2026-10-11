@@ -116,6 +116,8 @@ manage_instance can launch, inspect, and close Studio or list published place re
 ## Leaks
 
 - leak_check runs action in the game VM for each iteration, then measures memory tags, instance counts by class, unparented instances (needs Scene Analysis in Studio Beta Features), and optional watch expressions such as #require(game.ReplicatedStorage.Cache).entries.
+- Unparented instances are counted per creating script and class, as unparented:<script path>:<class>, which points straight at the code holding them.
+- Memory tags and instanceCount refresh only every few seconds, so a short settle_ms can hide growth in them.
 - The first iteration warms caches and is excluded. Only metrics that grow steadily are reported.
 
 ## GUI and characters
