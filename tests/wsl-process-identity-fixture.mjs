@@ -21,7 +21,7 @@ function fixture({ unknownLaunch = false, closeFails = false, startFails = false
       };
     },
     createClient(options) {
-      assert.equal(options.env.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR, '/fixture/worker/registry');
+      assert.equal(options.env.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR, '/fixture/worker/registry');
       assert.equal(options.env.RSMCP_STUDIO_TEST_WORKER_JOB, 'Local\\RsmcpStudioWorker-0123456789abcdef0123456789abcdef');
       return {
         async start() {

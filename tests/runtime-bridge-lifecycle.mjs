@@ -91,8 +91,8 @@ local SSS = game:GetService("ServerScriptService")
 local StarterPlayer = game:GetService("StarterPlayer")
 local sps = StarterPlayer:FindFirstChild("StarterPlayerScripts")
 return {
-  serverBridge = SSS:FindFirstChild("__MCP_ServerEvalBridge") ~= nil,
-  clientBridge = sps and sps:FindFirstChild("__MCP_ClientEvalBridge") ~= nil or false,
+  serverBridge = SSS:FindFirstChild("__Lumen_ServerEvalBridge") ~= nil,
+  clientBridge = sps and sps:FindFirstChild("__Lumen_ClientEvalBridge") ~= nil or false,
 }
 `,
   });
@@ -132,7 +132,7 @@ async function assertSharedSoloProcessLogs(client) {
   assert(peers.every((peer) => peer.instanceId === editInstance.id),
     'managed solo Peers share one Studio process Instance');
 
-  const marker = `__MCP_RUNTIME_BRIDGE_MANAGED_SOLO_${Date.now()}`;
+  const marker = `__Lumen_RUNTIME_BRIDGE_MANAGED_SOLO_${Date.now()}`;
   const markersByRole = {
     edit: `${marker}_EDIT`,
     server: `${marker}_SERVER`,
@@ -253,7 +253,7 @@ await runTest('runtime eval bridges stay out of edit mode', async ({ track }) =>
     await assertRuntimeEvalWorks(client, 'client-1');
     await assertRuntimeEvalWorks(client, 'client-2');
 
-    const marker = `__MCP_RUNTIME_BRIDGE_MANAGED_MP_${Date.now()}`;
+    const marker = `__Lumen_RUNTIME_BRIDGE_MANAGED_MP_${Date.now()}`;
     const markersByRole = {
       server: `${marker}_SERVER`,
       'client-1': `${marker}_CLIENT_1`,

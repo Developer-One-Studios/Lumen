@@ -80,7 +80,7 @@ describe('Studio close process verification', () => {
   });
 
   test('waits for delayed exit before deleting generated place files', async () => {
-    const baseplateDir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const baseplateDir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     const placeFile = path.join(baseplateDir, `Baseplate-${process.pid}-${Date.now()}.rbxl`);
     fs.mkdirSync(baseplateDir, { recursive: true });
     fs.writeFileSync(placeFile, '<roblox />');

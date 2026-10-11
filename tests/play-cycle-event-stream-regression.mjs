@@ -134,7 +134,7 @@ await runTest('event stream survives repeated play cycles', async ({ track }) =>
   const logQuery = {
     instance_id: instanceId,
     tail: 10,
-    filter: `__MCP_LOG_TIMEOUT_PROBE_${Date.now()}__`,
+    filter: `__Lumen_LOG_TIMEOUT_PROBE_${Date.now()}__`,
   };
 
   let playRunning = false;

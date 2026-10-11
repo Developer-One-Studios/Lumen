@@ -59,8 +59,8 @@ function harness(handleTool, { startError, createError, profileError, isolationE
     async callTool(name, args, options) {
       assert(profileVerified && isolationVerified, 'unsafe profiles must not launch Studio');
       assert.equal(name, 'manage_instance');
-      assert.equal(options.env.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR,
-        controlEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR);
+      assert.equal(options.env.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR,
+        controlEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR);
       assert.equal(options.env.ROBLOX_STUDIO_AUTH_TOKEN, controlEnv.ROBLOX_STUDIO_AUTH_TOKEN);
       if (args.action === 'close') closedLaunches.push(args.launch_id);
       if (handleTool) return handleTool(args, options);
@@ -81,7 +81,7 @@ function harness(handleTool, { startError, createError, profileError, isolationE
       assert.equal(resources.controls, 0, 'no control process survives session cleanup');
       assert.equal(resources.places, 0, 'no staged place survives session cleanup');
       if (controlEnv) {
-        assert.equal(existsSync(controlEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR), false,
+        assert.equal(existsSync(controlEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR), false,
           'the session-owned registry is removed after startup failure or close');
       }
     },
@@ -167,7 +167,7 @@ try {
     try {
       for (const [env, primary] of [[session.env, '0'], [run.controlEnv, '1']]) {
         const keys = [...Object.keys(ambientFlags), 'ROBLOX_STUDIO_AUTH_TOKEN',
-          'ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR'];
+          'LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR'];
         const child = new McpClient('session-env-fixture', {
           command: process.execPath,
           args: ['-e', `console.error(JSON.stringify(Object.fromEntries(${JSON.stringify(keys)}.map(key => [key, process.env[key]]))));`],
@@ -182,7 +182,7 @@ try {
         assert.equal(observed.ROBLOX_STUDIO_REQUIRE_PRIMARY, primary, 'children may proxy while the control requires primary');
         assert.equal(observed.MCP_INSTANCE_ID, '', 'ambient instance selection cannot escape this session');
         assert.equal(observed.ROBLOX_STUDIO_AUTH_TOKEN, session.env.ROBLOX_STUDIO_AUTH_TOKEN);
-        assert.equal(observed.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR, session.managedInstanceRegistryDirectory);
+        assert.equal(observed.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR, session.managedInstanceRegistryDirectory);
       }
     } finally {
       for (const [key, value] of originalFlags) {
@@ -195,13 +195,13 @@ try {
   }
 
   {
-    const runtimeEnv = { ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: '/caller/worker/registry' };
+    const runtimeEnv = { LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: '/caller/worker/registry' };
     const run = harness();
     run.adapters.createRegistry = () => assert.fail('a supplied worker registry must be retained');
     const session = await openManagedStudioSession({ port: PORT, env: runtimeEnv }, run.adapters);
-    assert.equal(session.managedInstanceRegistryDirectory, runtimeEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR);
+    assert.equal(session.managedInstanceRegistryDirectory, runtimeEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR);
     await session.close();
-    assert.equal(runtimeEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR, '/caller/worker/registry');
+    assert.equal(runtimeEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR, '/caller/worker/registry');
   }
 
   {

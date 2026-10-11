@@ -35,7 +35,7 @@ function ready(overrides: ReadyOverrides = {}) {
 }
 
 const TEST_SERVER_CONFIG = {
-  name: 'robloxstudio-mcp',
+  name: 'lumen-mcp',
   version: 'test-version',
   tools: [],
 };

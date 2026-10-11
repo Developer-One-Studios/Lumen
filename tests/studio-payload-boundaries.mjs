@@ -88,7 +88,7 @@ async function main(config) {
   const rows = [];
   const failures = [];
   const cleanupErrors = [];
-  const marker = `__MCP_Payload_${randomUUID().replaceAll('-', '')}`;
+  const marker = `__Lumen_Payload_${randomUUID().replaceAll('-', '')}`;
   const markerLiteral = JSON.stringify(marker);
   const rootCode = `local f=assert(workspace:FindFirstChild(${markerLiteral}),"owned fixture missing"); `;
   // ComputeStringHash returns binary, not hex (official EncodingService docs).
@@ -541,16 +541,16 @@ async function main(config) {
       ...process.env, MCP_PLUGINS_DIR: worker.pluginsDirectory,
       ...worker.environment,
       RSMCP_STUDIO_WORKING_DIRECTORY: worker.workingDirectory,
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
       ROBLOX_STUDIO_PORT: String(portLease.port), RSMCP_AUTO_ASSIGNED_PORT: '0',
     };
-    const installer = spawn(process.execPath, [DIST, '--install-bundled-plugin', '--plugin-path', path.join(REPO_ROOT, 'studio-plugin', 'MCPPlugin.rbxmx')], {
+    const installer = spawn(process.execPath, [DIST, '--install-bundled-plugin', '--plugin-path', path.join(REPO_ROOT, 'studio-plugin', 'LumenPlugin.rbxmx')], {
       env: { ...runtimeEnv, ROBLOX_STUDIO_PORT: String(recorderLease.port) }, stdio: 'inherit',
     });
     const [installCode, installSignal] = await once(installer, 'exit');
     assert.equal(installSignal, null);
     assert.equal(installCode, 0);
-    assert.ok(readFileSync(path.join(worker.pluginsDirectory, 'MCPPlugin.rbxmx'), 'utf8').includes(`http://localhost:${recorderLease.port}`), 'Isolated bundled plugin contains the owned recorder server port before launch');
+    assert.ok(readFileSync(path.join(worker.pluginsDirectory, 'LumenPlugin.rbxmx'), 'utf8').includes(`http://localhost:${recorderLease.port}`), 'Isolated bundled plugin contains the owned recorder server port before launch');
     await recorderLease.handoff();
     recorder = await openStudioFrameRecorder({ port: recorderLease.port, upstreamPort: portLease.port });
     await portLease.handoff();

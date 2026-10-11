@@ -2,7 +2,7 @@ import type { Connection, TransportUpdate } from "../types";
 
 const CURRENT_VERSION = "__VERSION__";
 const PLUGIN_VARIANT = "__PLUGIN_VARIANT__";
-const BASE_PORT = 58741;
+const BASE_PORT = 58761;
 const SENSITIVE_DIAGNOSTIC_TERMS = ["token", "authorization", "bearer", "password", "cookie", "secret"];
 
 function createConnection(port: number): Connection {
@@ -105,6 +105,25 @@ function getTransportDiagnostics(now: number): { status: string; detail: string 
 	};
 }
 
+interface Activity {
+	requests: number;
+	lastEndpoint?: string;
+	lastAt?: number;
+}
+
+const activity: Activity = { requests: 0 };
+
+// The panel shows this so a user can tell the agent is actually working in Studio.
+function noteRequest(endpoint: string): void {
+	activity.requests += 1;
+	activity.lastEndpoint = endpoint;
+	activity.lastAt = tick();
+}
+
+function getActivity(): Activity {
+	return activity;
+}
+
 export = {
 	CURRENT_VERSION,
 	PLUGIN_VARIANT,
@@ -113,4 +132,6 @@ export = {
 	clearTransportDiagnostics,
 	applyTransportUpdate,
 	getTransportDiagnostics,
+	noteRequest,
+	getActivity,
 };

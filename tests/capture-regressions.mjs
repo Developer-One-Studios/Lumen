@@ -148,7 +148,7 @@ gui:SetAttribute('Clicks',0);b.MouseButton1Click:Connect(function()gui:SetAttrib
         for (const key of ['activeDeviceId', 'resolution', 'pixelDensity', 'scalingMode', 'orientation']) {
           assert.deepEqual(after[key], before[key], `Host capture must restore simulator ${key}`);
         }
-        const leftover = await execute("return game:GetService('CoreGui'):FindFirstChild('__MCPCaptureMarkers')~=nil", 'client-1');
+        const leftover = await execute("return game:GetService('CoreGui'):FindFirstChild('__LumenCaptureMarkers')~=nil", 'client-1');
         assert.equal(leftover, false, 'Host marker GUI must be removed');
       };
       const inspectHostImage = (bytes, size) => {
@@ -208,7 +208,7 @@ gui:SetAttribute('Clicks',0);b.MouseButton1Click:Connect(function()gui:SetAttrib
             assert.match((await markerCall(action, first.captureId)).error, /stale|expired/);
           }
           assert.equal((await markerCall('finish', first.captureId)).stale, true);
-          assert.equal(await execute("return game:GetService('CoreGui'):FindFirstChild('__MCPCaptureMarkers')~=nil", 'client-1'), true);
+          assert.equal(await execute("return game:GetService('CoreGui'):FindFirstChild('__LumenCaptureMarkers')~=nil", 'client-1'), true);
         } finally {
           if (ownedToken) assert.equal((await markerCall('finish', ownedToken)).success, true);
         }

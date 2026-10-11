@@ -13,7 +13,7 @@ import { McpClient, runTest, assert, assertContains, assertNotContains, startPla
 const MARKER = 'EXEC_ERR_MARKER_8b1d2e';
 const PREEXISTING_MARKER = 'EXEC_PREEXISTING_REQUIRE_MARKER_1b9e7d';
 const GENERIC = 'Requested module experienced an error while loading';
-const PLUGIN_PATH_LEAK = 'MCPPlugin.modules.handlers.MetadataHandlers';
+const PLUGIN_PATH_LEAK = 'LumenPlugin.modules.handlers.MetadataHandlers';
 
 await runTest('execute_luau target=server preserves user error', async ({ track }) => {
   const client = track(new McpClient('A'));
@@ -54,7 +54,7 @@ await runTest('execute_luau target=server preserves user error', async ({ track 
       target: 'edit',
       code: `
 local module = Instance.new("ModuleScript")
-module.Name = "__MCPNestedRequireFailure"
+module.Name = "__LumenNestedRequireFailure"
 module.Source = [[
 local missing = script.Parent.EXEC_NESTED_REQUIRE_MARKER_missing
 return missing
@@ -80,10 +80,10 @@ require(module)
       target: 'edit',
       code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local old = ReplicatedStorage:FindFirstChild("__MCPPreexistingRequireFailure")
+local old = ReplicatedStorage:FindFirstChild("__LumenPreexistingRequireFailure")
 if old then old:Destroy() end
 local module = Instance.new("ModuleScript")
-module.Name = "__MCPPreexistingRequireFailure"
+module.Name = "__LumenPreexistingRequireFailure"
 module.Source = [[error("${PREEXISTING_MARKER}")]]
 module.Parent = ReplicatedStorage
 return module:GetFullName()
@@ -95,7 +95,7 @@ return module:GetFullName()
       target: 'edit',
       code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-require(ReplicatedStorage:WaitForChild("__MCPPreexistingRequireFailure"))
+require(ReplicatedStorage:WaitForChild("__LumenPreexistingRequireFailure"))
 `,
     });
     assert(r4.success === false, 'execute_luau pre-existing require reports failure');
@@ -108,7 +108,7 @@ require(ReplicatedStorage:WaitForChild("__MCPPreexistingRequireFailure"))
       target: 'edit',
       code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-require(ReplicatedStorage:WaitForChild("__MCPPreexistingRequireFailure"))
+require(ReplicatedStorage:WaitForChild("__LumenPreexistingRequireFailure"))
 `,
     });
     assert(r5.success === false, 'execute_luau cached pre-existing require reports failure');
@@ -145,7 +145,7 @@ require(ReplicatedStorage:WaitForChild("__MCPPreexistingRequireFailure"))
         target: 'edit',
         code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local module = ReplicatedStorage:FindFirstChild("__MCPPreexistingRequireFailure")
+local module = ReplicatedStorage:FindFirstChild("__LumenPreexistingRequireFailure")
 if module then module:Destroy() end
 return true
 `,

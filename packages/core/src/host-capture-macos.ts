@@ -192,7 +192,7 @@ async function getHelper(): Promise<string> {
   if (!compiledHelper) {
     compiledHelper = (async () => {
       await assertSwiftToolchain();
-      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-macos-helper-'));
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-macos-helper-'));
       const cleanup = () => fs.rmSync(directory, { recursive: true, force: true });
       try {
         const source = path.join(directory, 'capture.swift');
@@ -258,7 +258,7 @@ export async function captureMacStudioWindow(
   expectedIdentity?: HostWindowIdentity,
   runCapture: typeof runMacCapture = runMacCapture,
 ): Promise<HostCaptureResult> {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-macos-capture-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-macos-capture-'));
   try {
     const output = path.join(directory, 'capture.rgba');
     const stdout = await runCapture(output, titleHint, expectedIdentity);

@@ -1,27 +1,26 @@
-import { RobloxStudioMCPServer, getAllTools } from '@chrrxs/robloxstudio-mcp-core';
+import { RobloxStudioMCPServer, getReadOnlyTools } from 'lumen-mcp-core';
 import { createRequire } from 'module';
 import { installBundledPlugin, installPlugin } from './install-plugin.js';
 
-const flagValue = (flag: string): string | undefined => {
-  const idx = process.argv.indexOf(flag);
-  return idx !== -1 && idx + 1 < process.argv.length ? process.argv[idx + 1] : undefined;
-};
-
 const installBundledOnly = process.argv.includes('--install-bundled-plugin');
 const installWithFallback = process.argv.includes('--install-plugin');
+const pluginPathIndex = process.argv.indexOf('--plugin-path');
+const pluginPath = pluginPathIndex !== -1 && pluginPathIndex + 1 < process.argv.length
+  ? process.argv[pluginPathIndex + 1]
+  : undefined;
 
 if (installBundledOnly || installWithFallback) {
   const install = installBundledOnly
     ? installBundledPlugin
     : installPlugin;
-  await install({ sourcePath: flagValue('--plugin-path') }).catch((err) => {
+  await install({ sourcePath: pluginPath }).catch((err) => {
     console.error(err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
   });
 } else {
   if (process.argv.includes('--auto-install-plugin')) {
     await installBundledPlugin({
-      sourcePath: flagValue('--plugin-path'),
+      sourcePath: pluginPath,
       log: (message) => console.error(`[install-plugin] ${message}`),
       warn: (message) => console.error(message),
     }).catch((err) => {
@@ -31,21 +30,13 @@ if (installBundledOnly || installWithFallback) {
     });
   }
 
-  const openCloudKey = flagValue('--open-cloud-key');
-  const creatorId = flagValue('--creator-id');
-  const creatorGroupId = flagValue('--creator-group-id');
-
-  if (openCloudKey) process.env.ROBLOX_OPEN_CLOUD_API_KEY = openCloudKey;
-  if (creatorId) process.env.ROBLOX_CREATOR_USER_ID = creatorId;
-  if (creatorGroupId) process.env.ROBLOX_CREATOR_GROUP_ID = creatorGroupId;
-
   const require = createRequire(import.meta.url);
   const { version: VERSION } = require('../package.json');
 
   const server = new RobloxStudioMCPServer({
-    name: 'robloxstudio-mcp',
+    name: 'lumen-mcp-inspector',
     version: VERSION,
-    tools: getAllTools(),
+    tools: getReadOnlyTools(),
   });
 
   server.run().catch((error) => {

@@ -81,7 +81,7 @@ for (const scenario of [
   }
 }
 
-const workerDirectory = 'C:\\fixture\\robloxstudio-mcp-workers\\auto-install-e2e-worker';
+const workerDirectory = 'C:\\fixture\\lumen-mcp-workers\\auto-install-e2e-worker';
 const lockedFile = `${workerDirectory}\\managed-instances\\instance.json`;
 const removalError = Object.assign(new Error('Worker file remains locked'), {
   code: 'EPERM', syscall: 'unlink', path: lockedFile,

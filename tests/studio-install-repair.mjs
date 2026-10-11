@@ -16,7 +16,7 @@ const identity = {
 const env = {
   USERPROFILE: identity.profileDirectory, LOCALAPPDATA: identity.localAppData,
   TEMP: `${identity.localAppData}\\Temp`,
-  RSMCP_STUDIO_TEST_SAFETY_DIR: `${identity.localAppData}\\robloxstudio-mcp\\test-safety`,
+  RSMCP_STUDIO_TEST_SAFETY_DIR: `${identity.localAppData}\\lumen-mcp\\test-safety`,
 };
 function fixture(overrides = {}) {
   const calls = { downloads: 0, starts: 0, unrefs: 0, polls: 0, checks: 0, logs: [], installerArgs: [], prefetches: [], order: [] };
@@ -186,7 +186,7 @@ assert.throws(() => parseStudioRepairArguments(['--if-outdated', 'x']), /accepts
       }));
       assert.deepEqual(finalized, [{
         logName: 'RobloxStudioInstaller_DFECD.log', localAppData,
-        safetyRoot: path.win32.join(localAppData, 'robloxstudio-mcp', 'test-safety'),
+        safetyRoot: path.win32.join(localAppData, 'lumen-mcp', 'test-safety'),
       }]);
       assert.ok(events.includes('idle-check'));
       assert.deepEqual(result, outcome === 'finalized'

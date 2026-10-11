@@ -1,5 +1,6 @@
 import { EventEmitter, once } from 'node:events';
 import { ProxyBridgeService } from '../proxy-bridge-service.js';
+import { proxyChallengeProof } from '../auth.js';
 import { BridgeService, RequestFailure, toPublicPeer } from '../bridge-service.js';
 import type {
   MultiplayerGroup,
@@ -319,6 +320,9 @@ describe('ProxyBridgeService', () => {
     primary.registerPeer({ peerId: 'edit-peer', transportPeerId: 'edit-peer', instanceId: 'instance:edit', role: 'edit' });
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
+      if (url.startsWith('http://primary/proxy-challenge?')) {
+        return jsonResponse({ proof: proxyChallengeProof('test-secret', new URL(url).searchParams.get('nonce') ?? '') });
+      }
       if (url === 'http://primary/topology') return jsonResponse(primary.getTopologySnapshot());
       if (url === 'http://primary/proxy') {
         const request: unknown = JSON.parse(String(init?.body));

@@ -28,7 +28,7 @@ const heldId = randomUUID();
 const droppedId = randomUUID();
 const completionId = randomUUID();
 const lateExecutionId = randomUUID();
-const marker = `__MCP_ResponseRecovery_${randomUUID()}`;
+const marker = `__Lumen_ResponseRecovery_${randomUUID()}`;
 let holdAck = true;
 let dropped = false;
 let heldCompletionResponse;
@@ -117,17 +117,17 @@ try {
     ...worker.environment,
     MCP_PLUGINS_DIR: worker.pluginsDirectory,
     RSMCP_STUDIO_WORKING_DIRECTORY: worker.workingDirectory,
-    ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+    LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
     ROBLOX_STUDIO_PORT: String(portLease.port),
     RSMCP_AUTO_ASSIGNED_PORT: '0',
   };
-  const installer = spawn(process.execPath, [DIST, '--install-bundled-plugin', '--plugin-path', path.join(REPO_ROOT, 'studio-plugin', 'MCPPlugin.rbxmx')], {
+  const installer = spawn(process.execPath, [DIST, '--install-bundled-plugin', '--plugin-path', path.join(REPO_ROOT, 'studio-plugin', 'LumenPlugin.rbxmx')], {
     env: { ...runtimeEnv, ROBLOX_STUDIO_PORT: String(address.port) }, stdio: 'inherit',
   });
   const [installCode, installSignal] = await once(installer, 'exit');
   assert.equal(installSignal, null);
   assert.equal(installCode, 0);
-  assert.ok(readFileSync(path.join(worker.pluginsDirectory, 'MCPPlugin.rbxmx'), 'utf8').includes(`http://localhost:${address.port}`));
+  assert.ok(readFileSync(path.join(worker.pluginsDirectory, 'LumenPlugin.rbxmx'), 'utf8').includes(`http://localhost:${address.port}`));
   await portLease.handoff();
   session = await openManagedStudioSession({ port: portLease.port, env: runtimeEnv });
   const call = (name, args) => callMcpHttpTool(name, args, { port: portLease.port, env: session.env, timeoutMs: 35000 });

@@ -107,7 +107,7 @@ public static class StudioTestCredentialVault {
 function Get-StudioTestCredentialTarget {
     param([Parameter(Mandatory = $true)][string]$TargetSid)
     if ($TargetSid -notmatch '^S-1-5-21-(\d+-){3}\d+$') { throw 'A dedicated local/domain Windows SID is required for the saved credential.' }
-    return 'robloxstudio-mcp/studio-test-profile/' + $TargetSid
+    return 'lumen-mcp/studio-test-profile/' + $TargetSid
 }
 
 function Get-StudioTestSavedCredential {

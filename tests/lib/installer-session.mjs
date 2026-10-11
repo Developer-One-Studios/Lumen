@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const PREPARED_VARIANTS = [
-  { workspace: 'robloxstudio-mcp', asset: 'MCPPlugin.rbxmx', variant: 'main' },
-  { workspace: 'robloxstudio-mcp-inspector', asset: 'MCPInspectorPlugin.rbxmx', variant: 'inspector' },
+  { workspace: 'lumen-mcp', asset: 'LumenPlugin.rbxmx', variant: 'main' },
+  { workspace: 'lumen-mcp-inspector', asset: 'LumenInspectorPlugin.rbxmx', variant: 'inspector' },
 ];
 
 export function assertFunctionalArtifactSource(source) {

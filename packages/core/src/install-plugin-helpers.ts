@@ -17,14 +17,15 @@ import { homedir } from 'os';
 import { isUtf8 } from 'buffer';
 import { SaxesParser } from 'saxes';
 import { getStudioPlatformCapabilities } from './studio-platform.js';
+import { findWineStudioPluginsFolder } from './wine-prefixes.js';
 
 // Shared helpers for the per-package install-plugin.ts in
-// @chrrxs/robloxstudio-mcp and @chrrxs/robloxstudio-mcp-inspector. Bundled
+// lumen-mcp and lumen-mcp-inspector. Bundled
 // into both via tsup's noExternal at publish time, so changes here ship in
 // both packages on the next publish.
-const DEFAULT_PLUGIN_PORT = 58741;
+const DEFAULT_PLUGIN_PORT = 58761;
 const SERVER_URL_SETTING_KEY_PATTERN =
-  /MCP_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1|MCP_LAST_SUCCESSFUL_SERVER_URL_/g;
+  /LUMEN_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1|LUMEN_LAST_SUCCESSFUL_SERVER_URL_/g;
 
 /**
  * The bundled plugin is XML, so a custom bridge port can be embedded without
@@ -121,6 +122,11 @@ export function getPluginsFolder(): string {
         'to /mnt/c/Users/<you>/AppData/Local/Roblox/Plugins/ manually. ' +
         'Set MCP_PLUGINS_DIR to skip detection.',
     );
+  }
+
+  if (process.platform === 'linux' && !isWSL()) {
+    const winePluginsFolder = findWineStudioPluginsFolder();
+    if (winePluginsFolder) return winePluginsFolder;
   }
 
   return join(homedir(), 'Documents', 'Roblox', 'Plugins');
@@ -277,7 +283,7 @@ export interface PluginInstallResult {
   installed: boolean;
 }
 
-const PLUGIN_INSTALL_LOCK_NAME = '.robloxstudio-mcp-plugin-install.lock';
+const PLUGIN_INSTALL_LOCK_NAME = '.lumen-mcp-plugin-install.lock';
 
 interface PluginInstallLockOwner {
   pid: number;

@@ -628,7 +628,7 @@ async function main() {
     const client = new McpClient('regular-tooling-existing', {
       env: {
         ...SERVER_ENV,
-        ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: managedInstanceRegistryDirectory,
+        LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: managedInstanceRegistryDirectory,
       },
     });
     try {
@@ -673,7 +673,7 @@ async function main() {
         ...worker.environment,
         MCP_PLUGINS_DIR: worker.pluginsDirectory,
         RSMCP_STUDIO_WORKING_DIRECTORY: worker.workingDirectory,
-        ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+        LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
       },
       startupTimeoutMs: 60000,
     });

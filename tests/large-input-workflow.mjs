@@ -28,7 +28,7 @@ await runTest('verified staged large-input workflow', async ({ track }) => {
   const httpEnv = {
     ...process.env,
     ROBLOX_STUDIO_AUTH_TOKEN: process.env.ROBLOX_STUDIO_AUTH_TOKEN
-      ?? readFileSync(join(homedir(), '.robloxstudio-mcp/auth-token'), 'utf8').trim(),
+      ?? readFileSync(join(homedir(), '.lumen-mcp/auth-token'), 'utf8').trim(),
   };
   // Match the guide's HTTP wrapper: the body is the tool result, not content[].
   const httpOk = async args => {

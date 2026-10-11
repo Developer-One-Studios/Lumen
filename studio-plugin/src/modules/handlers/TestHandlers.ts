@@ -116,7 +116,7 @@ function startPlaytest(requestData: Record<string, unknown>) {
 		PluginSession.finishTest(preparedTest.token);
 
 		if (!ok) {
-			warn(`[robloxstudio-mcp] Playtest ended with error: ${result}`);
+			warn(`[lumen-mcp] Playtest ended with error: ${result}`);
 		}
 
 		testRunning = false;

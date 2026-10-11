@@ -13,10 +13,10 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-export const DEFAULT_TEST_PORT = 58741;
+export const DEFAULT_TEST_PORT = 58761;
 
 const lockScope = typeof process.getuid === 'function' ? `uid-${process.getuid()}` : 'user';
-const PORT_LOCK_DIR = path.join(os.tmpdir(), `robloxstudio-mcp-test-ports-${lockScope}`);
+const PORT_LOCK_DIR = path.join(os.tmpdir(), `lumen-mcp-test-ports-${lockScope}`);
 const DYNAMIC_PORT_MIN = 49152;
 const DYNAMIC_PORT_MAX_EXCLUSIVE = 65531;
 const MAX_ALLOCATION_ATTEMPTS = 100;

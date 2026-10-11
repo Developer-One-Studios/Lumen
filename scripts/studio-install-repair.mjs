@@ -319,7 +319,7 @@ export async function repairStudioInstallation(env = process.env, adapters = {},
   } = adapters;
   if (platform !== 'win32') throw new Error('Studio installation repair requires native Windows under the dedicated profile supervisor.');
   const identity = assertProfile();
-  const safetyRoot = path.win32.join(identity.localAppData, 'robloxstudio-mcp', 'test-safety');
+  const safetyRoot = path.win32.join(identity.localAppData, 'lumen-mcp', 'test-safety');
   const temp = path.win32.join(identity.localAppData, 'Temp');
   if (normalized(env.RSMCP_STUDIO_TEST_SAFETY_DIR) !== normalized(safetyRoot)
     || normalized(env.LOCALAPPDATA) !== normalized(identity.localAppData)
@@ -463,7 +463,7 @@ export async function updateStudioInstallation(env = process.env, adapters = {})
   const identity = assertProfile();
   assertRunActive(env);
   const versionsRoot = path.win32.join(identity.localAppData, 'Roblox', 'Versions');
-  const recordFile = path.join(identity.localAppData, 'robloxstudio-mcp', 'studio-update-attempt.json');
+  const recordFile = path.join(identity.localAppData, 'lumen-mcp', 'studio-update-attempt.json');
   const installedVersion = () => {
     try { return path.win32.basename(path.win32.dirname(installed(versionsRoot))); }
     catch { return undefined; }
@@ -515,7 +515,7 @@ export async function updateStudioInstallation(env = process.env, adapters = {})
     try {
       const result = await finalize({
         localAppData: identity.localAppData, logName: failure.completedLog, now, env, installed,
-        safetyRoot: path.win32.join(identity.localAppData, 'robloxstudio-mcp', 'test-safety'),
+        safetyRoot: path.win32.join(identity.localAppData, 'lumen-mcp', 'test-safety'),
         assertIdle: async () => {
           assertRunActive(env);
           if ((await processes(env, identity.sid)).length) throw new Error('Repair finalization requires an idle dedicated account.');

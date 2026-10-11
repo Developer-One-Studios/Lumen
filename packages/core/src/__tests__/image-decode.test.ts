@@ -332,7 +332,7 @@ describe('decodeImagePathToRgba', () => {
   let tempDirectory: string;
 
   beforeEach(() => {
-    tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-png-'));
+    tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-png-'));
   });
 
   afterEach(() => {

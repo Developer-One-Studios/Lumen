@@ -31,7 +31,7 @@ const READY_BODY = {
 };
 
 const TEST_SERVER_CONFIG = {
-  name: 'robloxstudio-mcp',
+  name: 'lumen-mcp',
   version: READY_BODY.pluginVersion,
   tools: [],
 };
@@ -56,8 +56,8 @@ describe('HTTP Server', () => {
       const response = await request(app).get('/health').expect(200);
       expect(response.body).toMatchObject({
         status: 'ok',
-        service: 'robloxstudio-mcp',
-        serverName: 'robloxstudio-mcp',
+        service: 'lumen-mcp',
+        serverName: 'lumen-mcp',
         capabilities: {
           studioLifecycle: {
             protocolVersion: 3,
@@ -80,11 +80,11 @@ describe('HTTP Server', () => {
         tools,
         bridge,
         new Set(['get_place_info']),
-        { name: 'robloxstudio-mcp-inspector', version: '2.0.0', tools: [] },
+        { name: 'lumen-mcp-inspector', version: '2.0.0', tools: [] },
       );
 
       const response = await request(inspectorApp).get('/health').expect(200);
-      expect(response.body.serverName).toBe('robloxstudio-mcp-inspector');
+      expect(response.body.serverName).toBe('lumen-mcp-inspector');
       expect(response.body.capabilities.studioLifecycle).toBeUndefined();
       await request(inspectorApp).post('/mcp/manage_instance').send({ action: 'status' }).expect(404);
     });
@@ -102,7 +102,7 @@ describe('HTTP Server', () => {
     });
 
     test('returns a structured guaranteed pre-spawn rejection when process identity is unavailable', async () => {
-      const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+      const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
       const unsupportedTools = new RobloxStudioTools(bridge);
       Object.defineProperty(unsupportedTools, 'instanceManager', {
         value: new StudioInstanceManager({
@@ -486,7 +486,7 @@ describe('HTTP Server', () => {
         tools,
         bridge,
         undefined,
-        { name: 'robloxstudio-mcp', version: '2.0.0', tools: [] },
+        { name: 'lumen-mcp', version: '2.0.0', tools: [] },
       );
       const mismatch = await request(versionedApp).post('/ready').send({
         ...READY_BODY,
@@ -562,11 +562,12 @@ describe('HTTP Server', () => {
           isRunning: false,
         },
         existing: {
-          peerId: 'peer-1',
           instanceId: 'instance:test',
           role: 'edit',
         },
       });
+      expect(dup.body.existing).not.toHaveProperty('peerId');
+      expect(JSON.stringify(dup.body)).not.toContain('peer-1');
     });
 
     test('plugin disconnect by peerId', async () => {

@@ -132,7 +132,7 @@ try {
         throw 'Studio needs an interactive Windows desktop. Run this launcher from a signed-in Windows session, not a service or session-0 task.'
     }
     if ($config.repo -notmatch '^[A-Za-z]:[\\/]') {
-        throw 'Use --repo C:\work\robloxstudio-mcp. A separate Windows user cannot use a personal WSL/UNC checkout.'
+        throw 'Use --repo C:\work\lumen-mcp. A separate Windows user cannot use a personal WSL/UNC checkout.'
     }
     $entrypoint = Join-Path $config.repo 'scripts\studio-test-profile.mjs'
     $childScript = Join-Path $config.repo 'scripts\studio-test-profile.ps1'

@@ -89,7 +89,7 @@ describe('Smoke', () => {
   });
 
   test('sanitized WSL capability selects the retained Windows launcher boundary', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const platformCapabilities = detectStudioPlatform({
       platform: 'linux',
       kernelVersion: 'Linux version 6.6.87.2-microsoft-standard-WSL2',
@@ -279,7 +279,7 @@ describe('Smoke', () => {
 
     const response = await request(app).get('/health').expect(200);
     expect(response.body.status).toBe('ok');
-    expect(response.body.service).toBe('robloxstudio-mcp');
+    expect(response.body.service).toBe('lumen-mcp');
   });
 
   test('clearAllPendingRequests rejects all pending', async () => {
@@ -298,7 +298,7 @@ describe('Smoke', () => {
     const bridge = new BridgeService();
     const tools = new RobloxStudioTools(bridge);
     const app = createHttpServer(tools, bridge, undefined, {
-      name: 'robloxstudio-mcp',
+      name: 'lumen-mcp',
       version: READY.pluginVersion,
       tools: [],
     });
@@ -314,7 +314,7 @@ describe('Smoke', () => {
     const bridge = new BridgeService();
     const tools = new RobloxStudioTools(bridge);
     const app = createHttpServer(tools, bridge, undefined, {
-      name: 'robloxstudio-mcp',
+      name: 'lumen-mcp',
       version: READY.pluginVersion,
       tools: [],
     });
@@ -485,44 +485,58 @@ describe('Smoke', () => {
       refresh: (record: unknown) => record,
     };
 
-    await tools.manageInstance({
-      action: 'launch',
-      source: 'local_file',
-      local_place_file: '/tmp/custom-launch-place.rbxl',
-      wait_for_connection: false,
-      studio_executable: 'C:\\Roblox\\version-custom\\RobloxStudioBeta.exe',
-      studio_working_directory: 'C:\\Studio Workers\\worker-7',
-      process_environment: {
-        set: {
-          STUDIO_LAUNCH_LOADER: 'C:\\LaunchTools\\studio_loader.dll',
-          STUDIO_LAUNCH_BUILD_VERSION: '0.0.0+build.123',
-        },
-        remove: ['STUDIO_LAUNCH_LOADED_BUILD_VERSION'],
-      },
-    });
-
-    expect(launch).toHaveBeenCalledWith(expect.objectContaining({
-      studioExecutable: 'C:\\Roblox\\version-custom\\RobloxStudioBeta.exe',
-      studioWorkingDirectory: 'C:\\Studio Workers\\worker-7',
-      processEnvironment: {
-        set: {
-          STUDIO_LAUNCH_LOADER: 'C:\\LaunchTools\\studio_loader.dll',
-          STUDIO_LAUNCH_BUILD_VERSION: '0.0.0+build.123',
-        },
-        remove: ['STUDIO_LAUNCH_LOADED_BUILD_VERSION'],
-      },
-    }));
-
     await expect(tools.manageInstance({
       action: 'launch',
       source: 'local_file',
       local_place_file: '/tmp/custom-launch-place.rbxl',
-      process_environment: { remove: ['STUDIO_LAUNCH_LOADED_BUILD_VERSION; whoami'] },
-    })).rejects.toThrow(/Invalid process environment variable name/);
+      wait_for_connection: false,
+      studio_executable: '/bin/sh',
+    })).rejects.toThrow(/ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES/);
+    expect(launch).not.toHaveBeenCalled();
+
+    process.env.ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES = '1';
+    try {
+      await tools.manageInstance({
+        action: 'launch',
+        source: 'local_file',
+        local_place_file: '/tmp/custom-launch-place.rbxl',
+        wait_for_connection: false,
+        studio_executable: 'C:\\Roblox\\version-custom\\RobloxStudioBeta.exe',
+        studio_working_directory: 'C:\\Studio Workers\\worker-7',
+        process_environment: {
+          set: {
+            STUDIO_LAUNCH_LOADER: 'C:\\LaunchTools\\studio_loader.dll',
+            STUDIO_LAUNCH_BUILD_VERSION: '0.0.0+build.123',
+          },
+          remove: ['STUDIO_LAUNCH_LOADED_BUILD_VERSION'],
+        },
+      });
+
+      expect(launch).toHaveBeenCalledWith(expect.objectContaining({
+        studioExecutable: 'C:\\Roblox\\version-custom\\RobloxStudioBeta.exe',
+        studioWorkingDirectory: 'C:\\Studio Workers\\worker-7',
+        processEnvironment: {
+          set: {
+            STUDIO_LAUNCH_LOADER: 'C:\\LaunchTools\\studio_loader.dll',
+            STUDIO_LAUNCH_BUILD_VERSION: '0.0.0+build.123',
+          },
+          remove: ['STUDIO_LAUNCH_LOADED_BUILD_VERSION'],
+        },
+      }));
+
+      await expect(tools.manageInstance({
+        action: 'launch',
+        source: 'local_file',
+        local_place_file: '/tmp/custom-launch-place.rbxl',
+        process_environment: { remove: ['STUDIO_LAUNCH_LOADED_BUILD_VERSION; whoami'] },
+      })).rejects.toThrow(/Invalid process environment variable name/);
+    } finally {
+      delete process.env.ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES;
+    }
   });
 
   test('Studio launch uses the exact executable and working directory, patches only the child environment, and persists no environment secrets', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const exactExecutable = 'C:\\Roblox\\version-custom\\RobloxStudioBeta.exe';
     const parentLoadedVersion = process.env.STUDIO_LAUNCH_LOADED_BUILD_VERSION;
     const studioWorkingDirectory = '/tmp/rsmcp-worker-7655';
@@ -592,7 +606,7 @@ describe('Smoke', () => {
   });
 
   test('Studio launch stops its owned process if the initial registry write fails', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const liveProcessIds = new Set<number>();
     const stopped: number[] = [];
@@ -631,7 +645,7 @@ describe('Smoke', () => {
     }
   });
   test('Studio launch stops its owned process when creation identity cannot be captured', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const liveProcessIds = new Set<number>();
     const stopped: number[] = [];
@@ -676,7 +690,7 @@ describe('Smoke', () => {
   });
 
   test('identity-required launch rejects adapters without suspended-process controls', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const stopped: Array<{ pid: number; startedAt?: string }> = [];
     let running = true;
@@ -716,7 +730,7 @@ describe('Smoke', () => {
   });
 
   test('identity-required launch retains ownership until explicitly completed', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const liveProcessIds = new Set<number>();
     const resumed: number[] = [];
@@ -840,7 +854,7 @@ describe('Smoke', () => {
   });
 
   test('identity-required launch aborts when its caller disappears before authorization', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const stopped: number[] = [];
     jest.useFakeTimers();
@@ -901,7 +915,7 @@ describe('Smoke', () => {
   });
 
   test('ownership lease does not race active authorization or release', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     let authorizeStarted = false;
     let releaseStarted = false;
     let resolveAuthorize: (() => void) | undefined;
@@ -979,7 +993,7 @@ describe('Smoke', () => {
   });
 
   test('failed launch authorization aborts the suspended process', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const liveProcessIds = new Set<number>();
     const stopped: number[] = [];
@@ -1032,7 +1046,7 @@ describe('Smoke', () => {
   });
 
   test('broker restart exact-stops an orphaned authorized launch', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const stopped: Array<{ pid: number; startedAt?: string }> = [];
     await registry.upsert({
@@ -1084,7 +1098,7 @@ describe('Smoke', () => {
   });
 
   test('manage_instance asynchronously associates and closes a no-wait local-file launch', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const liveProcessIds = new Set([1111]);
     const stopped: number[] = [];
     const localPlaceFile = '/home/chris/Projects/roblox-games/strain/.worktree-studio/place.rbxl';
@@ -1214,7 +1228,7 @@ describe('Smoke', () => {
   });
 
   test('manage_instance reports and closes an async launch that never connects', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const liveProcessIds = new Set<number>();
     const stopped: number[] = [];
     const localPlaceFile = '/tmp/strain-acceptance-b/.worktree-studio/place.rbxl';
@@ -1290,7 +1304,7 @@ describe('Smoke', () => {
   });
 
   test('manage_instance retains terminal status after an unconnected process exits', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const liveProcessIds = new Set<number>();
     const processAdapter = {
       currentBootId: () => 'boot-1',
@@ -1344,7 +1358,7 @@ describe('Smoke', () => {
   });
 
   test('overlapping launches retain distinct adapter-provided native process ids', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     let spawnCount = 0;
     const processAdapter = {
       currentBootId: () => 'boot-1',
@@ -1375,7 +1389,7 @@ describe('Smoke', () => {
   });
 
   test('process observation errors preserve durable ownership and expose unknown liveness', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const pid = 6611;
     const startedAt = '100';
     let spawned = false;
@@ -1434,7 +1448,7 @@ describe('Smoke', () => {
   });
 
   test('connected ownership survives one successful miss and closes only after confirmed absence', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const pid = 6612;
     let spawned = false;
     let observedAt = 1000;
@@ -1495,7 +1509,7 @@ describe('Smoke', () => {
   });
 
   test('status refreshes ten managed records from one process snapshot', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     let nextPid = 6700;
     let snapshotCalls = 0;
     const live = new Map<number, string>();
@@ -1543,7 +1557,7 @@ describe('Smoke', () => {
   });
 
   test('health remains responsive while an asynchronous lifecycle adapter is pending', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     let releaseSpawn!: () => void;
     let signalSpawnStarted!: () => void;
     const spawnStarted = new Promise<void>((resolve) => { signalSpawnStarted = resolve; });
@@ -1604,7 +1618,7 @@ describe('Smoke', () => {
   });
 
   test('health remains responsive while registry lock acquisition is pending', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     fs.mkdirSync(path.join(registryDir, '.lock'));
     const bridge = new BridgeService();
     const tools = new RobloxStudioTools(bridge);
@@ -1645,7 +1659,7 @@ describe('Smoke', () => {
   });
 
   test('managed instance registry reclaims a fresh lock owned by a dead process', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const lockDir = path.join(registryDir, '.lock');
     fs.mkdirSync(lockDir);
     fs.writeFileSync(path.join(lockDir, 'owner.json'), JSON.stringify({
@@ -1666,7 +1680,7 @@ describe('Smoke', () => {
   }, 10_000);
 
   test('managed close refuses a recycled native Studio pid with a different start time', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     let processStartedAt = '100';
     const stopped: number[] = [];
     const processAdapter = {
@@ -1750,8 +1764,8 @@ describe('Smoke', () => {
   });
 
   test('manage_instance close recovers a managed baseplate from the shared registry', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
-    const baseplateDir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
+    const baseplateDir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     const placeFile = path.join(baseplateDir, 'Baseplate-123-456.rbxl');
     fs.mkdirSync(baseplateDir, { recursive: true });
     fs.writeFileSync(placeFile, '<roblox />', 'utf8');
@@ -1811,8 +1825,8 @@ describe('Smoke', () => {
   });
 
   test('manage_instance close prunes previous-boot registry records without stopping recycled pids', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
-    const baseplateDir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
+    const baseplateDir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     const placeFile = path.join(baseplateDir, 'Baseplate-124-456.rbxl');
     fs.mkdirSync(baseplateDir, { recursive: true });
     fs.writeFileSync(placeFile, '<roblox />', 'utf8');
@@ -1870,8 +1884,8 @@ describe('Smoke', () => {
   });
 
   test('manage_instance close returns success when another process already stopped the managed instance', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
-    const baseplateDir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
+    const baseplateDir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     const placeFile = path.join(baseplateDir, 'Baseplate-125-456.rbxl');
     fs.mkdirSync(baseplateDir, { recursive: true });
     fs.writeFileSync(placeFile, '<roblox />', 'utf8');
@@ -1962,7 +1976,7 @@ describe('Smoke', () => {
   });
 
   test('manage_instance status removes malformed data and retains recent terminal records', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
     const today = new Date().toISOString().slice(0, 10);
     fs.writeFileSync(path.join(registryDir, 'malformed.json'), '{not-json', 'utf8');
     fs.writeFileSync(path.join(registryDir, 'closed-record.json'), JSON.stringify({
@@ -2010,8 +2024,8 @@ describe('Smoke', () => {
   });
 
   test('manage_instance status self-heals same-boot records whose Studio process exited', async () => {
-    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-registry-'));
-    const baseplateDir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-registry-'));
+    const baseplateDir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     const placeFile = path.join(baseplateDir, 'Baseplate-126-456.rbxl');
     fs.mkdirSync(baseplateDir, { recursive: true });
     fs.writeFileSync(placeFile, '<roblox />', 'utf8');
@@ -2155,7 +2169,7 @@ describe('Smoke', () => {
   });
 
   test('baseplate cleanup removes generated temp files and Studio lock sidecars', () => {
-    const dir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const dir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     fs.mkdirSync(dir, { recursive: true });
     const placeFile = path.join(dir, 'Baseplate-123-456.rbxl');
     const lockFile = `${placeFile}.lock`;
@@ -2180,7 +2194,7 @@ describe('Smoke', () => {
   });
 
   test('baseplate sweep deletes stale files from dead servers but keeps fresh and foreign files', () => {
-    const dir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const dir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     fs.mkdirSync(dir, { recursive: true });
     // A pid that is guaranteed dead: a child that has already exited.
     const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
@@ -2206,7 +2220,7 @@ describe('Smoke', () => {
   });
 
   test('baseplate sweep keeps stale files whose owner server is still running', () => {
-    const dir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const dir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     fs.mkdirSync(dir, { recursive: true });
     const oldTime = new Date(Date.now() - 25 * 60 * 60 * 1000);
     // The jest runner's parent process is alive for the duration of the test.
@@ -2225,7 +2239,7 @@ describe('Smoke', () => {
   });
 
   test('baseplate launch sweeps stale files as a side effect', () => {
-    const dir = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+    const dir = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
     fs.mkdirSync(dir, { recursive: true });
     const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
     const oldTime = new Date(Date.now() - 25 * 60 * 60 * 1000);
@@ -2535,13 +2549,13 @@ describe('Smoke', () => {
     });
     bridge.resolveRequest(pending!.requestId, {
       success: true,
-      modelPath: 'game.ServerStorage.__MCPGeneratedModels.GeneratedCrate',
+      modelPath: 'game.ServerStorage.__LumenGeneratedModels.GeneratedCrate',
     });
 
     const result = await resultPromise;
     expect(JSON.parse(result.content[0].text)).toEqual({
       success: true,
-      modelPath: 'game.ServerStorage.__MCPGeneratedModels.GeneratedCrate',
+      modelPath: 'game.ServerStorage.__LumenGeneratedModels.GeneratedCrate',
     });
   });
 
@@ -2568,7 +2582,7 @@ describe('Smoke', () => {
     expect(pending?.request.data).not.toHaveProperty('schema');
     bridge.resolveRequest(pending!.requestId, {
       success: true,
-      modelPath: 'game.ServerStorage.__MCPGeneratedModels.SegmentedVehicle',
+      modelPath: 'game.ServerStorage.__LumenGeneratedModels.SegmentedVehicle',
     });
 
     await resultPromise;

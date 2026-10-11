@@ -38,8 +38,8 @@ function Assert-FixturePassword {
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $sid = $identity.User.Value
 $userName = $identity.Name
-$fixtureTarget = 'robloxstudio-mcp/credential-fixture/' + [Guid]::NewGuid().ToString('N')
-$otherTarget = 'robloxstudio-mcp/credential-fixture/' + [Guid]::NewGuid().ToString('N')
+$fixtureTarget = 'lumen-mcp/credential-fixture/' + [Guid]::NewGuid().ToString('N')
+$otherTarget = 'lumen-mcp/credential-fixture/' + [Guid]::NewGuid().ToString('N')
 $password = New-FixturePassword
 $selection = $null
 try {

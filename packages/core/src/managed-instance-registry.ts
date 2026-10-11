@@ -84,19 +84,19 @@ interface RegistryLockOwner {
 }
 
 export function defaultManagedInstanceRegistryDir(): string {
-  if (process.env.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR) {
-    return process.env.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR;
+  if (process.env.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR) {
+    return process.env.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR;
   }
 
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
-    return path.join(process.env.LOCALAPPDATA, 'robloxstudio-mcp', 'managed-instances', 'v1');
+    return path.join(process.env.LOCALAPPDATA, 'lumen-mcp', 'managed-instances', 'v1');
   }
 
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'robloxstudio-mcp', 'managed-instances', 'v1');
+    return path.join(os.homedir(), 'Library', 'Application Support', 'lumen-mcp', 'managed-instances', 'v1');
   }
 
-  return path.join(os.homedir(), '.local', 'state', 'robloxstudio-mcp', 'managed-instances', 'v1');
+  return path.join(os.homedir(), '.local', 'state', 'lumen-mcp', 'managed-instances', 'v1');
 }
 
 function delay(ms: number): Promise<void> {

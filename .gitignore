@@ -10,8 +10,8 @@ dist/
 # studio-plugin/out is the compiled Luau output (rbxtsc); rebuilt by `npm run build`.
 studio-plugin/out/
 # Compiled rbxmx artifacts — produced by `npm run build:plugin`, attached to GitHub releases.
-studio-plugin/MCPPlugin.rbxmx
-studio-plugin/MCPInspectorPlugin.rbxmx
+studio-plugin/LumenPlugin.rbxmx
+studio-plugin/LumenInspectorPlugin.rbxmx
 # Carbon filesystem-capture session files are unrelated to MCP plugin builds.
 studio-plugin/Carbon.rbxm
 studio-plugin/.Carbon.rbxm.lock

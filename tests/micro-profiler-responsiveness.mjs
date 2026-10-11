@@ -48,7 +48,7 @@ function newSevereProfilerLogs(logs) {
   return entries.filter((entry) => {
     const message = String(entry?.message ?? '');
     const severity = String(entry?.level ?? entry?.messageType ?? entry?.type ?? '');
-    return /micro.?profiler|robloxstudio-mcp/i.test(message)
+    return /micro.?profiler|lumen-mcp/i.test(message)
       && /error|exception|timeout|failed/i.test(`${severity} ${message}`);
   });
 }

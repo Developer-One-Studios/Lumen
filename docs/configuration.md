@@ -8,7 +8,7 @@ transport is unaffected by HTTP authentication.
 
 HTTP endpoints that can invoke tools (`/mcp`, `/mcp/<tool>`, `/proxy`,
 `/topology`, and `/unregister-instance-id`) require a shared-secret token. The
-server creates one at `~/.robloxstudio-mcp/auth-token` on first run and uses
+server creates one at `~/.lumen-mcp/auth-token` on first run and uses
 mode `0600` on platforms that support POSIX permissions. HTTP MCP clients can
 send the token as either:
 
@@ -128,6 +128,10 @@ the host OS and crops it to the viewport:
   windows, or a changed window identity produce an error instead of capturing
   another window. Local-file window titles containing an absolute path are
   matched by basename; multiple matches are still rejected.
+- On native Linux with an X11 `DISPLAY`, Studio under Wine is an X11 (usually
+  XWayland) window. The server finds it with `xwininfo` by its
+  `robloxstudiobeta.exe` class and title, records `_NET_WM_PID` with `xprop`, and
+  reads it with `xwd`. Several matching places are rejected instead of guessed.
 - Other platforms report that host capture is unavailable and return Studio's
   original result or error.
 
@@ -193,8 +197,8 @@ prefix with `WINEPREFIX`.
 
 The launcher's stdout and stderr go to a per-launch log in `wine-launches/`
 inside the managed-instance registry directory
-(`~/.local/state/robloxstudio-mcp/managed-instances/v1/` unless
-`ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR` is set). The newest 10 logs are
+(`~/.local/state/lumen-mcp/managed-instances/v1/` unless
+`LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR` is set). The newest 10 logs are
 kept, and a failed launch includes the end of its log in the error. Wine keeps
 writing to the log while Studio runs; set `WINEDEBUG=-all` in the launcher to
 keep it small.
@@ -212,7 +216,7 @@ under Wine.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ROBLOX_STUDIO_HOST` | `127.0.0.1` | HTTP bridge bind address. |
-| `ROBLOX_STUDIO_PORT` | `58741` | HTTP bridge port. |
+| `ROBLOX_STUDIO_PORT` | `58761` | HTTP bridge port. |
 | `ROBLOX_STUDIO_AUTH_TOKEN` | Auto-generated token file | Explicit shared secret that overrides the token file. |
 | `ROBLOX_STUDIO_NO_AUTH` | Unset | Set to `1` or `true` to disable HTTP tool authentication. This is not recommended. |
 | `ROBLOX_STUDIO_ALLOWED_ORIGINS` | None | Comma-separated browser origins allowed to call the HTTP API cross-origin. |
@@ -222,6 +226,13 @@ under Wine.
 | `ROBLOX_STUDIO_EXE` | Auto-discovered on Windows, WSL, and macOS | Studio executable to launch. Required on native Linux with a Wine launcher, where it must be an existing `RobloxStudioBeta.exe` in the Wine prefix. |
 | `ROBLOX_STUDIO_WINE_LAUNCHER` | Unset | Native Linux only: executable that `exec`s Wine on Studio. See [Native Linux with Wine](#native-linux-with-wine). |
 | `ROBLOX_STUDIO_WINE_START_TIMEOUT_MS` | `60000` | Native Linux with Wine only: how long an authorized launch may take to become `RobloxStudioBeta.exe`, from 1 to 150000 ms. |
+| `ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES` | Unset | Set to `1` to let `manage_instance` accept `studio_executable`, `process_environment` and `studio_working_directory`, which can run any program. |
+| `ROBLOX_MCP_ARTIFACT_DIR` | Unset | Confines every tool-written file and baseline read to this directory; relative paths resolve inside it. |
+| `ROBLOX_SOURCEMAP` | Nearest `sourcemap.json` above the working directory | Rojo sourcemap used to annotate Studio locations with files and to refuse edits to synced scripts. |
+| `ROBLOX_ALLOW_SYNCED_EDITS` | Unset | Set to `1` to let script edit tools change scripts that Rojo syncs from disk. |
+| `ROBLOX_SOURCEMAP_MAX_AGE_S` | `300` | A sourcemap older than this many seconds, or older than the project file, is rebuilt in memory with `rojo sourcemap`. |
+| `ROBLOX_CREATOR_GROUP_ID` | Unset | Group that `upload_asset` and `upload_assets` upload to when the call passes no `group_id`. |
+| `ROBLOX_CREATOR_USER_ID` | Unset | User that uploads belong to when neither a group nor `user_id` is given. |
 
 Creator Store audio preview requires the `legacy-asset:manage` scope (Legacy
 Assets → manage in the API key settings); `asset:read` alone returns 403. See

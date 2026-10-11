@@ -17,18 +17,18 @@ const asset = (variant, marker = '') => Buffer.from([
   '<roblox version="4"><Item class="Script"><Properties><string name="Source"><![CDATA[',
   `local CURRENT_VERSION = "${version}";`,
   `local PLUGIN_VARIANT = "${variant}";`,
-  'local BASE_PORT = 58741;',
-  'local DEFAULT_MCP_URL = "http://localhost:58741";',
-  'local GLOBAL_SETTING_KEY = "MCP_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1";',
-  'local SETTING_KEY_PREFIX = "MCP_LAST_SUCCESSFUL_SERVER_URL_";',
+  'local BASE_PORT = 58761;',
+  'local DEFAULT_MCP_URL = "http://localhost:58761";',
+  'local GLOBAL_SETTING_KEY = "LUMEN_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1";',
+  'local SETTING_KEY_PREFIX = "LUMEN_LAST_SUCCESSFUL_SERVER_URL_";',
   `-- ${marker}`,
   ']]></string></Properties></Item></roblox>',
 ].join('\n'));
 
 try {
   for (const variant of ['main', 'inspector']) {
-    const packageName = variant === 'main' ? 'robloxstudio-mcp' : 'robloxstudio-mcp-inspector';
-    const assetName = variant === 'main' ? 'MCPPlugin.rbxmx' : 'MCPInspectorPlugin.rbxmx';
+    const packageName = variant === 'main' ? 'lumen-mcp' : 'lumen-mcp-inspector';
+    const assetName = variant === 'main' ? 'LumenPlugin.rbxmx' : 'LumenInspectorPlugin.rbxmx';
     const packageRoot = path.join(fixtureRoot, `${packageName} space-ü`);
     const dist = path.join(packageRoot, 'dist');
     const pluginDir = path.join(packageRoot, 'studio-plugin');
@@ -43,7 +43,7 @@ try {
       cwd: fixtureRoot,
       encoding: 'utf8',
       timeout: 15_000,
-      env: { ...process.env, MCP_PLUGINS_DIR: destination, ROBLOX_STUDIO_PORT: '58741' },
+      env: { ...process.env, MCP_PLUGINS_DIR: destination, ROBLOX_STUDIO_PORT: '58761' },
     });
     for (const flag of ['--install-bundled-plugin', '--install-plugin']) {
       const result = run([flag]);

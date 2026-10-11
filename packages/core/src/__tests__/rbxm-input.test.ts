@@ -80,15 +80,37 @@ test('rejects an oversized base64 string before decoding', async () => {
 
 test('URL inputs carry cancellation through fetch and body consumption', async () => {
   const controller = new AbortController();
+  const fetchStarted = Promise.withResolvers<void>();
   const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
     const signal = options!.signal!;
+    fetchStarted.resolve();
     return new Response(new ReadableStream({
       start(stream) { signal.addEventListener('abort', () => stream.error(signal.reason), { once: true }); },
     }));
   });
-  const outcome = readRbxmInput({ url: 'https://example.test/model' }, 'game.Workspace', controller.signal);
+  const outcome = readRbxmInput({ url: 'https://example.test/model' }, 'game.Workspace', controller.signal, async () => ['93.184.215.14']);
   const assertion = expect(outcome).rejects.toThrow('cancel import');
+  await fetchStarted.promise;
   controller.abort(new Error('cancel import'));
   await assertion;
   expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test('URL inputs refuse loopback, private and link-local hosts, including after a redirect', async () => {
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+    new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:58761/topology' } }));
+  try {
+    const publicHost = async () => ['93.184.215.14'];
+    for (const url of ['http://127.0.0.1/x', 'http://[::1]/x', 'http://169.254.169.254/latest', 'http://192.168.1.10/x']) {
+      await expect(readRbxmInput({ url }, 'game.Workspace', undefined, publicHost)).rejects.toThrow(/refuses/);
+    }
+    await expect(readRbxmInput({ url: 'https://rebind.test/x' }, 'game.Workspace', undefined, async () => ['10.0.0.5']))
+      .rejects.toThrow(/refuses/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(readRbxmInput({ url: 'https://cdn.test/x' }, 'game.Workspace', undefined, publicHost))
+      .rejects.toThrow(/refuses 127\.0\.0\.1:58761/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  } finally {
+    fetchMock.mockRestore();
+  }
 });

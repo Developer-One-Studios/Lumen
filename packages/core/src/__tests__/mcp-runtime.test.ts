@@ -12,6 +12,7 @@ import {
   serverInstructions,
 } from '../mcp-runtime.js';
 import { getReadOnlyTools, TOOL_DEFINITIONS } from '../tools/definitions.js';
+import { FORK_FEATURES } from '../tools/fork/index.js';
 import type { RobloxStudioTools } from '../tools/index.js';
 
 type JsonObject = Record<string, unknown>;
@@ -97,9 +98,7 @@ describe('MCP v2 tool runtime', () => {
         const result = normalizeToolResult(raw, era);
         expect(result.isError).toBe(true);
         expect(result.structuredContent).toEqual(payload);
-        expect(result.content).toEqual(era === 'modern'
-          ? []
-          : [{ type: 'text', text: JSON.stringify(payload) }]);
+        expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(payload) }]);
       }
     });
 
@@ -293,12 +292,15 @@ describe('MCP v2 tool runtime', () => {
     const serialized = JSON.stringify(catalog);
     const inspectorCatalog = getReadOnlyTools().map(publicToolDefinition);
 
-    expect(catalog).toHaveLength(49);
-    expect(serialized.length).toBeLessThanOrEqual(45_000);
-    expect(catalog.filter((tool) => tool.outputSchema)).toHaveLength(48);
+    const featureTools = FORK_FEATURES.flatMap((feature) => feature.definitions);
+    const featureReadTools = featureTools.filter((tool) => tool.category === 'read').length;
+    // Each feature tool may spend about 1400 characters of catalog; the fixed tools stay within the original budget.
+    expect(catalog).toHaveLength(62 + featureTools.length);
+    expect(serialized.length).toBeLessThanOrEqual(60_000 + 1_400 * featureTools.length);
+    expect(catalog.filter((tool) => tool.outputSchema)).toHaveLength(61 + featureTools.length);
     expect(catalog.every((tool) => tool.description.length <= 120)).toBe(true);
-    expect(inspectorCatalog).toHaveLength(25);
-    expect(JSON.stringify(inspectorCatalog).length).toBeLessThanOrEqual(20_000);
+    expect(inspectorCatalog).toHaveLength(26 + featureReadTools);
+    expect(JSON.stringify(inspectorCatalog).length).toBeLessThanOrEqual(22_000 + 1_400 * featureReadTools);
     expect(byName.get('selection')?.outputSchema).toEqual({
       type: 'object',
       additionalProperties: true,
@@ -445,7 +447,7 @@ describe('MCP v2 tool runtime', () => {
     expect(fullInstructions).toContain('set_script_source');
     expect(fullInstructions).toContain('solo_playtest');
     expect(fullInstructions).toContain('preview');
-    expect(fullInstructions).toContain('robloxstudio://tool-guides');
+    expect(fullInstructions).toContain('lumen://tool-guides');
     expect(fullInstructions).toContain('selection action=view before capture_screenshot');
     expect(fullInstructions).not.toContain('—');
 
@@ -461,7 +463,7 @@ describe('MCP v2 tool runtime', () => {
     expect(inspectorInstructions).toContain('selection action=view before capture_screenshot');
     expect(inspectorInstructions).toContain('get_connected_instances');
     expect(inspectorInstructions).toContain('get_roblox_docs');
-    expect(inspectorInstructions).toContain('robloxstudio://tool-guides');
+    expect(inspectorInstructions).toContain('lumen://tool-guides');
   });
 
   test('advertises annotations and returns validated structuredContent', async () => {

@@ -101,7 +101,7 @@ export function createTestProfileEnvironment(identity, { sourceSid, targetSid, n
   }
   const env = {};
   for (const [key, value] of Object.entries(inherited)) {
-    if (/^(?:MCP_|RSMCP_|ROBLOXSTUDIO_MCP_|ROBLOX_STUDIO_|NODE_|NPM_CONFIG_|npm_config_)/iu.test(key) ||
+    if (/^(?:MCP_|RSMCP_|LUMEN_MCP_|ROBLOX_STUDIO_|NODE_|NPM_CONFIG_|npm_config_)/iu.test(key) ||
         /^(?:USERPROFILE|LOCALAPPDATA|APPDATA|TEMP|TMP|HOME|HOMEDRIVE|HOMEPATH|USERNAME|USERDOMAIN|PATH|PWD|OLDPWD|INIT_CWD|WSLENV|WSL_DISTRO_NAME|WSL_INTEROP|PSModulePath|WinPSModulePath)$/iu.test(key)) continue;
     env[key] = value;
   }
@@ -230,7 +230,7 @@ export async function runTestProfilePayload(payload, {
     Object.assign(env, profileTestExpectations(payload.testExpectations));
   }
   // Account-global, never a snapshot/worker/port directory or inherited setting.
-  env.RSMCP_STUDIO_TEST_SAFETY_DIR = path.win32.join(identity.localAppData, 'robloxstudio-mcp', 'test-safety');
+  env.RSMCP_STUDIO_TEST_SAFETY_DIR = path.win32.join(identity.localAppData, 'lumen-mcp', 'test-safety');
   if (payload.prepareWorkspace === true) env.RSMCP_STUDIO_TEST_PREPARED = '1';
   console.log(`Studio test identity: ${identity.accountName} (${identity.sid})`);
   console.log(`Studio harness checkout: ${payload.repo}`);

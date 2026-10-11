@@ -220,7 +220,7 @@ function settleResponse(requestId: string, entry: PendingResponse, disposition: 
 	entry.body = "";
 	rememberTerminalResponse(requestId);
 	if (disposition === "unknown" || disposition === "expired") {
-		warn(`[robloxstudio-mcp] Response ${requestId} outcome unknown (${disposition}); stored result released, mutation must not be replayed`);
+		warn(`[lumen-mcp] Response ${requestId} outcome unknown (${disposition}); stored result released, mutation must not be replayed`);
 	}
 }
 
@@ -267,7 +267,7 @@ function sendPendingResponse(requestId: string, entry: PendingResponse): void {
 	entry.sentGeneration = expectedGeneration;
 	const [sendOk, sendError] = pcall(() => client.Send(entry.body));
 	if (!sendOk) {
-		warn(`[robloxstudio-mcp] WebSocket response send failed for ${requestId} (${entry.body.size()} bytes, stage=socket_send): ${tostring(sendError)}`);
+		warn(`[lumen-mcp] WebSocket response send failed for ${requestId} (${entry.body.size()} bytes, stage=socket_send): ${tostring(sendError)}`);
 		scheduleReconnect(expectedGeneration, "WebSocket response send failed; retained for reconnect");
 		return;
 	}
@@ -398,7 +398,7 @@ function dispatchRequest(request: StudioRequestEvent, requestBytes: number): voi
 
 function invokeCallback(name: string, callback: () => void): void {
 	const [callbackOk, callbackError] = pcall(callback);
-	if (!callbackOk) warn(`[robloxstudio-mcp] ${name} callback failed: ${tostring(callbackError)}`);
+	if (!callbackOk) warn(`[lumen-mcp] ${name} callback failed: ${tostring(callbackError)}`);
 }
 
 function reportTransport(update: TransportUpdate): void {
@@ -465,7 +465,7 @@ function beginStage(work: TransportWork, stage: string): void {
 		if (connectionWork === work) scheduleReconnect(work.generation, detail);
 		else {
 			finishWork(work);
-			warn(`[robloxstudio-mcp] ${detail}`);
+			warn(`[lumen-mcp] ${detail}`);
 			flushRefresh();
 		}
 	});
@@ -544,7 +544,7 @@ function registerReady(work: TransportWork, reconnectOnFailure: boolean): ReadyR
 			: HttpDiagnostics.formatRequestFailure(readyUrl, false, readyResult);
 		if (!readyFailureLogKeys.has(readyLogKey)) {
 			readyFailureLogKeys.add(readyLogKey);
-			warn(`[robloxstudio-mcp] /ready failed for ${instanceId}/${transportRole}: ${detail}`);
+			warn(`[lumen-mcp] /ready failed for ${instanceId}/${transportRole}: ${detail}`);
 		}
 		if (reconnectOnFailure) scheduleReconnect(expectedGeneration, detail, readyOk && readyResult.StatusCode === 409);
 		return undefined;
@@ -556,7 +556,7 @@ function registerReady(work: TransportWork, reconnectOnFailure: boolean): ReadyR
 	}
 	if (readyFailureLogKeys.has(readyLogKey)) {
 		readyFailureLogKeys.delete(readyLogKey);
-		print(`[robloxstudio-mcp] /ready connected for ${instanceId}/${readyData.assignedRole} via ${currentOptions.serverUrl}`);
+		print(`[lumen-mcp] /ready connected for ${instanceId}/${readyData.assignedRole} via ${currentOptions.serverUrl}`);
 	}
 	cachedReady = readyData;
 	invokeCallback("WebSocket ready", () => currentOptions.onReady(readyData));
@@ -624,7 +624,7 @@ function connect(expectedGeneration: number): void {
 				}
 				if (message.size() > MAX_FRAME_BYTES) {
 					const detail = `WebSocket request frame exceeds limit (stage=request_receive, bytes=${message.size()}, maxBytes=${MAX_FRAME_BYTES}); execution not started`;
-					warn(`[robloxstudio-mcp] ${detail}`);
+					warn(`[lumen-mcp] ${detail}`);
 					scheduleReconnect(expectedGeneration, detail);
 					return;
 				}
@@ -697,7 +697,7 @@ function flushRefresh(): void {
 		}
 	}, (detail) => {
 		finishWork(work);
-		warn(`[robloxstudio-mcp] ${detail}`);
+		warn(`[lumen-mcp] ${detail}`);
 		flushRefresh();
 	});
 }

@@ -1,9 +1,9 @@
 {
-  "name": "MCPPlugin-Dev",
+  "name": "LumenPlugin-Dev",
   "tree": {
     "$className": "DataModel",
     "ServerStorage": {
-      "MCPPlugin": {
+      "LumenPlugin": {
         "$path": "out/server",
         "modules": {
           "$path": "out/modules"

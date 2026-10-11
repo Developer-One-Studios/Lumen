@@ -54,7 +54,7 @@ interface PersistedBreakpointEntry {
 interface RegistryScope {
 	key: string;
 	// Registries saved by plugin versions that keyed unpublished places by a
-	// saved __MCPPlaceId attribute; read once so those breakpoints carry over.
+	// saved __LumenPlaceId attribute; read once so those breakpoints carry over.
 	legacyKey?: string;
 }
 

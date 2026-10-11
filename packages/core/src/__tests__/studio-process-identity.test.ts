@@ -156,7 +156,7 @@ function cloneDataModel(model: DataModel): DataModel {
 
 function mcpAttributes(model: DataModel): string[] {
   return [...model.replicatedStorage.names(), ...model.serverStorage.names()]
-    .filter((name) => name.startsWith('__MCP'));
+    .filter((name) => name.startsWith('__Lumen'));
 }
 
 /** One DataModel in one Studio window: survives plugin reloads, and its CoreGui is never saved or copied. */
@@ -182,7 +182,7 @@ class StudioDataModel {
 }
 
 const DEFAULT_PLACE: Place = { placeId: 0, name: 'Same saved place' };
-const EDIT_SERVER_URL = 'http://127.0.0.1:58741';
+const EDIT_SERVER_URL = 'http://127.0.0.1:58761';
 
 const dependencies: Plugin = {
   name: 'studio-session-identity-dependencies',
@@ -346,12 +346,12 @@ describe('Studio edit-session identity', () => {
   test('an edit removes saved MCP attributes without touching user attributes or adopting saved identity', () => {
     const studio = new Studio();
     const saved = dataModel();
-    saved.replicatedStorage.SetAttribute('__MCPTopologyMode', 'shared');
-    saved.replicatedStorage.SetAttribute('__MCPTopologyInstanceId', 'instance:sav-000');
-    saved.replicatedStorage.SetAttribute('__MCPTopologyGroupId', 'saved-group');
-    saved.replicatedStorage.SetAttribute('__MCPTopologyToken', 'saved-token');
+    saved.replicatedStorage.SetAttribute('__LumenTopologyMode', 'shared');
+    saved.replicatedStorage.SetAttribute('__LumenTopologyInstanceId', 'instance:sav-000');
+    saved.replicatedStorage.SetAttribute('__LumenTopologyGroupId', 'saved-group');
+    saved.replicatedStorage.SetAttribute('__LumenTopologyToken', 'saved-token');
     saved.replicatedStorage.SetAttribute('GameVersion', 7);
-    saved.serverStorage.SetAttribute('__MCPPlaceId', 'legacy-place');
+    saved.serverStorage.SetAttribute('__LumenPlaceId', 'legacy-place');
 
     const edit = studio.openPlace(DEFAULT_PLACE, saved);
 
@@ -393,7 +393,7 @@ describe('Studio edit-session identity', () => {
     const studio = new Studio();
     const window = new StudioDataModel('edit', DEFAULT_PLACE, dataModel());
     const invalid = new MockInstance(className);
-    invalid.Name = '__MCPSessionIdentity';
+    invalid.Name = '__LumenSessionIdentity';
     invalid.Value = value;
     invalid.Archivable = archivable;
     invalid.Parent = window.coreGui;
@@ -443,7 +443,7 @@ describe('Playtest topology handoff without DataModel state', () => {
     const server = studio.loadRuntime(edit);
 
     expect(edit.stopMonitor.requestStop().ok).toBe(true);
-    const key = `MCP_STOP_PLAY_${instanceId}`;
+    const key = `LUMEN_STOP_PLAY_${instanceId}`;
     expect(studio.settings.GetSetting(key)).toEqual(expect.any(String));
 
     server.setRole('edit');
@@ -623,8 +623,8 @@ describe('Plugin reloads during a playtest', () => {
     expect(server.session.getInstanceId()).toBe(instanceId);
     expect(reloaded.stopMonitor.requestStop().ok).toBe(true);
     server.stopMonitor.clearPending();
-    expect(studio.settings.GetSetting(`MCP_STOP_PLAY_${instanceId}`)).toBe(false);
-    studio.settings.SetSetting(`MCP_STOP_PLAY_${instanceId}`, undefined);
+    expect(studio.settings.GetSetting(`LUMEN_STOP_PLAY_${instanceId}`)).toBe(false);
+    studio.settings.SetSetting(`LUMEN_STOP_PLAY_${instanceId}`, undefined);
 
     reloaded.endPlay();
     expect(studio.settings.snapshot()).toEqual(before);

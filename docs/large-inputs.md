@@ -65,7 +65,7 @@ It refuses an unowned root/name collision. Destructive cleanup checks the owner 
 
 ## Copyable deterministic Parts example
 
-Start the matching MCP server/plugin, select an edit instance with `get_connected_instances`, then run this **once from the repository root**. Set `MCP_INSTANCE_ID` to that exact ID. The example talks to the authenticated HTTP bridge on `ROBLOX_STUDIO_PORT` (default 58741), using `ROBLOX_STUDIO_AUTH_TOKEN` or the usual token file. Keep the generated journal private: it contains your source.
+Start the matching MCP server/plugin, select an edit instance with `get_connected_instances`, then run this **once from the repository root**. Set `MCP_INSTANCE_ID` to that exact ID. The example talks to the authenticated HTTP bridge on `ROBLOX_STUDIO_PORT` (default 58761), using `ROBLOX_STUDIO_AUTH_TOKEN` or the usual token file. Keep the generated journal private: it contains your source.
 
 ```bash
 export MCP_INSTANCE_ID='instance:replace-with-the-selected-edit-instance'
@@ -87,11 +87,11 @@ const recipe = deterministicPartsRecipe(transferId, 40);
 // when the intended effects are correct. Do not normalize or trim the source.
 const options = { instanceId, transferId, ...recipe, chunkBytes: 16 * 1024 };
 const transfer = createLargeInputTransfer(options);
-const port = Number(process.env.ROBLOX_STUDIO_PORT ?? 58741);
+const port = Number(process.env.ROBLOX_STUDIO_PORT ?? 58761);
 const env = {
   ...process.env,
   ROBLOX_STUDIO_AUTH_TOKEN: process.env.ROBLOX_STUDIO_AUTH_TOKEN
-    ?? readFileSync(join(homedir(), '.robloxstudio-mcp/auth-token'), 'utf8').trim(),
+    ?? readFileSync(join(homedir(), '.lumen-mcp/auth-token'), 'utf8').trim(),
 };
 // Exclusive creation prevents blindly rerunning this script after a lost response.
 writeFileSync('transfer-plan.json', JSON.stringify(options), { flag: 'wx', mode: 0o600 });

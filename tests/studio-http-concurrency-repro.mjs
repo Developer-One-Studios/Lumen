@@ -226,7 +226,7 @@ function readLogs(sinceMs) {
         const at = Date.parse(line.slice(0, 24));
         return Number.isFinite(at) && at >= sinceMs;
       })
-      .filter((line) => /CloseDataModel\].*(Drain|BindToClose)|still waiting|past shutdown deadline|RSMCP-PROBE|HttpTraceError.*127\.0\.0\.1|robloxstudio-mcp\]/i.test(line));
+      .filter((line) => /CloseDataModel\].*(Drain|BindToClose)|still waiting|past shutdown deadline|RSMCP-PROBE|HttpTraceError.*127\.0\.0\.1|lumen-mcp\]/i.test(line));
   } catch (error) {
     return [`log read failed: ${error instanceof Error ? error.message : String(error)}`];
   }

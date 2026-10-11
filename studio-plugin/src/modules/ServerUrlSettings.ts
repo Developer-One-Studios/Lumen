@@ -1,7 +1,7 @@
 import PluginSession from "./PluginSession";
 
-const SETTING_KEY_PREFIX = "MCP_LAST_SUCCESSFUL_SERVER_URL_";
-const GLOBAL_SETTING_KEY = "MCP_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1";
+const SETTING_KEY_PREFIX = "LUMEN_LAST_SUCCESSFUL_SERVER_URL_";
+const GLOBAL_SETTING_KEY = "LUMEN_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1";
 
 let pluginRef: Plugin | undefined;
 
@@ -28,6 +28,14 @@ function normalizeServerUrl(serverUrl: string | undefined): string {
 	return normalized;
 }
 
+// A remembered URL is reconnected to on every place open without asking, so it may never leave this machine.
+function isLoopbackUrl(serverUrl: string): boolean {
+	const [authority] = serverUrl.lower().match("^https?://([^/]+)");
+	if (authority === undefined) return false;
+	const host = (authority as string).gsub(":%d+$", "")[0];
+	return host === "localhost" || host === "[::1]" || host.match("^127%.%d+%.%d+%.%d+$")[0] !== undefined;
+}
+
 function extractPort(serverUrl: string): number | undefined {
 	const [portStr] = serverUrl.match(":(%d+)$");
 	if (portStr === undefined) return undefined;
@@ -42,7 +50,7 @@ function addUnique(values: string[], value: string): void {
 
 function computePlaceKeys(): string[] {
 	const placeKeys = [PluginSession.getPlaceKey()];
-	// Unpublished places used to be keyed by a saved __MCPPlaceId attribute.
+	// Unpublished places used to be keyed by a saved __LumenPlaceId attribute.
 	const legacyPlaceKey = PluginSession.getLegacyPlaceKey();
 	if (legacyPlaceKey !== undefined) addUnique(placeKeys, legacyPlaceKey);
 	return placeKeys;
@@ -59,7 +67,7 @@ function readSettingString(key: string): string | undefined {
 	if (!ok || !typeIs(value, "string")) return undefined;
 
 	const normalized = normalizeServerUrl(value as string);
-	return normalized !== "" ? normalized : undefined;
+	return normalized !== "" && isLoopbackUrl(normalized) ? normalized : undefined;
 }
 
 function writeSettingString(key: string, serverUrl: string): void {
@@ -69,7 +77,7 @@ function writeSettingString(key: string, serverUrl: string): void {
 
 function rememberServerUrl(serverUrl: string): void {
 	const normalized = normalizeServerUrl(serverUrl);
-	if (!pluginRef || normalized === "") return;
+	if (!pluginRef || normalized === "" || !isLoopbackUrl(normalized)) return;
 	writeSettingString(GLOBAL_SETTING_KEY, normalized);
 	writeSettingString(settingKey(PluginSession.getPlaceKey()), normalized);
 }

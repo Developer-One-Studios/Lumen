@@ -54,7 +54,7 @@ const PEER_GONE_TIMEOUT_MS = 45_000;
 const IDLE_MS = 50_000;
 const SATURATION_REQUESTS = 12;
 const RUN = `rsmcp-shutdown-${Date.now().toString(36)}`;
-const PLUGIN_HANDLER = 'MCPPlugin.modules.StudioWebSocket';
+const PLUGIN_HANDLER = 'LumenPlugin.modules.StudioWebSocket';
 
 function tool(name, args = {}, timeoutMs = 30_000) {
   const instanceId = process.env.MCP_INSTANCE_ID;
@@ -286,7 +286,7 @@ const INTERESTING = [
   /HttpTraceError.*(127\.0\.0\.1|localhost)/,
   /WebStreamClient\]/,
   /wstrack|TrackHttpRequest/,
-  /robloxstudio-mcp/,
+  /lumen-mcp/,
 ];
 
 await runTest('play-server shutdown /disconnect repro', async () => {

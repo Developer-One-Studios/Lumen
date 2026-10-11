@@ -50,13 +50,13 @@ await runTest('eval_server_runtime preserves user error', async ({ track }) => {
       target: 'server',
       code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local oldServer = workspace:FindFirstChild("__MCPEvalNestedServerFailure")
+local oldServer = workspace:FindFirstChild("__LumenEvalNestedServerFailure")
 if oldServer then oldServer:Destroy() end
-local oldClient = ReplicatedStorage:FindFirstChild("__MCPEvalNestedClientFailure")
+local oldClient = ReplicatedStorage:FindFirstChild("__LumenEvalNestedClientFailure")
 if oldClient then oldClient:Destroy() end
 
 local serverModule = Instance.new("ModuleScript")
-serverModule.Name = "__MCPEvalNestedServerFailure"
+serverModule.Name = "__LumenEvalNestedServerFailure"
 serverModule.Source = [[
 local missing = script.Parent.${NESTED_SERVER_MARKER}
 return missing
@@ -64,7 +64,7 @@ return missing
 serverModule.Parent = workspace
 
 local clientModule = Instance.new("ModuleScript")
-clientModule.Name = "__MCPEvalNestedClientFailure"
+clientModule.Name = "__LumenEvalNestedClientFailure"
 clientModule.Source = [[
 local missing = script.Parent.${NESTED_CLIENT_MARKER}
 return missing
@@ -75,7 +75,7 @@ return true
     });
 
     const r3 = await client.callToolError('eval_server_runtime', {
-      code: `require(workspace.__MCPEvalNestedServerFailure)`,
+      code: `require(workspace.__LumenEvalNestedServerFailure)`,
     });
     assert(r3.ok === false, 'eval_server_runtime nested require reports failure');
     assertContains(r3.error || '', NESTED_SERVER_MARKER,
@@ -84,7 +84,7 @@ return true
       'server nested require response does NOT use the generic require wrapper');
 
     const r3Cached = await client.callToolError('eval_server_runtime', {
-      code: `require(workspace.__MCPEvalNestedServerFailure)`,
+      code: `require(workspace.__LumenEvalNestedServerFailure)`,
     });
     assert(r3Cached.ok === false, 'eval_server_runtime cached nested require reports failure');
     assertContains(r3Cached.error || '', NESTED_SERVER_MARKER,
@@ -96,7 +96,7 @@ return true
       target: 'client-1',
       code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local module = ReplicatedStorage:WaitForChild("__MCPEvalNestedClientFailure", 5)
+local module = ReplicatedStorage:WaitForChild("__LumenEvalNestedClientFailure", 5)
 require(module)
 `,
     });
@@ -110,7 +110,7 @@ require(module)
       target: 'client-1',
       code: `
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local module = ReplicatedStorage:WaitForChild("__MCPEvalNestedClientFailure", 5)
+local module = ReplicatedStorage:WaitForChild("__LumenEvalNestedClientFailure", 5)
 require(module)
 `,
     });

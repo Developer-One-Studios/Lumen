@@ -23,7 +23,7 @@ import {
 } from '../scripts/studio-lifecycle.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const WORKTREE_PLUGIN = resolve(__dirname, '..', 'studio-plugin', 'MCPPlugin.rbxmx');
+const WORKTREE_PLUGIN = resolve(__dirname, '..', 'studio-plugin', 'LumenPlugin.rbxmx');
 const forceManagedSession = process.argv.includes('--managed');
 
 
@@ -97,7 +97,7 @@ async function main() {
     delete runtimeEnv.RSMCP_STUDIO_WORKING_DIRECTORY;
     delete runtimeEnv.RSMCP_STUDIO_TEST_WORKER_JOB;
     delete runtimeEnv.RSMCP_STUDIO_DIRECTORY_ISOLATED;
-    delete runtimeEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR;
+    delete runtimeEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR;
   }
   const existingInstanceId = runtimeEnv.MCP_INSTANCE_ID?.trim();
   let portLease;
@@ -117,7 +117,7 @@ async function main() {
         runtimeEnv.MCP_PLUGINS_DIR = worker.pluginsDirectory;
         runtimeEnv.RSMCP_STUDIO_WORKING_DIRECTORY = worker.workingDirectory;
         runtimeEnv.RSMCP_STUDIO_DIRECTORY_ISOLATED = '1';
-        runtimeEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR = worker.managedInstanceRegistryDirectory;
+        runtimeEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR = worker.managedInstanceRegistryDirectory;
         runtimeEnv.ROBLOX_STUDIO_PORT = String(portLease.port);
         console.log(`Installing worktree plugin ${WORKTREE_PLUGIN}`);
         // Never hide a missing worktree build by downloading a released plugin.

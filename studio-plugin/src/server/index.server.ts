@@ -9,6 +9,7 @@ import StopPlayMonitor from "../modules/StopPlayMonitor";
 import StudioWebSocket from "../modules/StudioWebSocket";
 import PluginSession from "../modules/PluginSession";
 import BreakpointHandlers from "../modules/handlers/BreakpointHandlers";
+import BrokerTickets from "../modules/BrokerTickets";
 import * as RenderMonitor from "../modules/RenderMonitor";
 
 // Track render-loop liveness so input/screenshot tools can report "window
@@ -27,6 +28,7 @@ RuntimeLogBuffer.install();
 StopPlayMonitor.init(plugin);
 BreakpointHandlers.init(plugin);
 ServerUrlSettings.init(plugin);
+BrokerTickets.init(plugin);
 // Before anything reads place keys: an edit session removes MCP attributes
 // that older plugin versions saved into the place, and hands its topology to
 // playtest DataModels through plugin settings instead.
@@ -105,7 +107,6 @@ UI.updateUIState();
 // Every DataModel shares Studio's five plugin HTTP request slots, and a
 // request has no time limit. Check for updates once, from the edit DataModel,
 // instead of again in every play server and client.
-if (startupRole === "edit") Communication.checkForUpdates();
 task.delay(TOOLBAR_REGISTRATION_DELAY_SECONDS, registerToolbarButton);
 
 // Auto-activate per Peer. Runtime plugin VMs can load before their first
@@ -119,7 +120,7 @@ function autoActivatePeer(): void {
 	} else {
 		const result = ensureRuntimeBridgeInstalled();
 		if (!result.installed) {
-			warn(`[robloxstudio-mcp] Runtime eval bridge install failed: ${result.error}`);
+			warn(`[lumen-mcp] Runtime eval bridge install failed: ${result.error}`);
 		}
 	}
 	if (role === "server") {
@@ -151,7 +152,7 @@ function autoActivatePeer(): void {
 			}
 		});
 		if (!activationOk) {
-			warn(`[robloxstudio-mcp] Automatic ${role} Peer activation failed: ${activationError}`);
+			warn(`[lumen-mcp] Automatic ${role} Peer activation failed: ${activationError}`);
 		}
 	}
 	if (role === "server") {

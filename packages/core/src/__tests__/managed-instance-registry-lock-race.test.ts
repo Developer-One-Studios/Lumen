@@ -91,7 +91,7 @@ describe('ManagedInstanceRegistry lock handoff', () => {
   let registryDir: string;
 
   beforeEach(async () => {
-    registryDir = await fs.mkdtemp(path.join(os.tmpdir(), 'robloxstudio-mcp-lock-race-'));
+    registryDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lumen-mcp-lock-race-'));
   });
 
   afterEach(async () => {

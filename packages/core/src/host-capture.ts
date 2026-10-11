@@ -18,13 +18,16 @@
 // expects — without guessing at Studio's dock layout or the DPI scale.
 // On macOS, ScreenCaptureKit captures only the selected Studio window after
 // verifying existing Screen Recording permission and its stable window identity.
+// On native Linux, Studio is a Wine X11 window and the X11 tools read it directly.
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { captureMacStudioWindow, prepareMacHostCapture } from './host-capture-macos.js';
+import { captureLinuxStudioWindow, isLinuxHostCaptureAvailable } from './host-capture-linux.js';
+import { getStudioPlatformCapabilities } from './studio-platform.js';
 
-// macOS uses the app bundle ID; Windows uses the verified executable name.
+// macOS uses the app bundle ID; Windows uses the verified executable name; Linux uses the Wine window class.
 export type HostWindowIdentity = { windowId: number; processId: number; bundleIdentifier: string };
 
 export type HostWindowCapture = {
@@ -61,11 +64,13 @@ export function isHostCaptureDisabled(env: NodeJS.ProcessEnv = process.env): boo
 }
 
 export function isHostCaptureSupported(platform: NodeJS.Platform = process.platform): boolean {
-  return platform === 'win32' || platform === 'darwin';
+  return platform === 'win32' || platform === 'darwin'
+    || (platform === 'linux' && isLinuxHostCaptureAvailable() && !getStudioPlatformCapabilities().isWsl);
 }
 
 export function hostCaptureUnsupportedReason(platform: NodeJS.Platform = process.platform): string {
-  return `host window capture is only implemented on Windows and macOS (this is ${platform})`;
+  if (platform === 'linux') return 'host window capture on Linux needs an X11 DISPLAY (Wine draws Studio through XWayland)';
+  return `host window capture is only implemented on Windows, macOS and Linux with X11 (this is ${platform})`;
 }
 
 export async function prepareHostWindowCapture(): Promise<void> {
@@ -416,7 +421,8 @@ export async function captureStudioWindow(titleHint?: string, expectedIdentity?:
     return { ok: false, error: hostCaptureUnsupportedReason() };
   }
   if (process.platform === 'darwin') return captureMacStudioWindow(titleHint, expectedIdentity);
-  const outFile = path.join(os.tmpdir(), `robloxstudio-mcp-capture-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.bgra`);
+  if (process.platform === 'linux') return captureLinuxStudioWindow(titleHint, expectedIdentity);
+  const outFile = path.join(os.tmpdir(), `lumen-mcp-capture-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.bgra`);
   try {
     const report = parseWindowsCaptureReport(await runWindowsCapture(titleHint, outFile, expectedIdentity), expectedIdentity);
     if (!report.ok) return report;

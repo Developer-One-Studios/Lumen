@@ -1,7 +1,7 @@
-import { createPluginInstaller } from '@chrrxs/robloxstudio-mcp-core';
-import type { PluginInstallOptions } from '@chrrxs/robloxstudio-mcp-core';
+import { createPluginInstaller } from 'lumen-mcp-core';
+import type { PluginInstallOptions } from 'lumen-mcp-core';
 
-const installer = createPluginInstaller(import.meta.url, 'inspector');
+const installer = createPluginInstaller(import.meta.url, 'main');
 
 export async function installBundledPlugin(options: PluginInstallOptions = {}): Promise<void> {
   await installer.installBundledPlugin(options);

@@ -1,5 +1,5 @@
 {
-  "name": "MCPPlugin",
+  "name": "LumenPlugin",
   "tree": {
     "$className": "Script",
     "$path": "out/server",

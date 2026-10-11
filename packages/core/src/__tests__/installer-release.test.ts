@@ -36,18 +36,18 @@ function loadModule(filename: string, moduleUrl: string, overrides: Record<strin
 }
 
 describe.each(['main', 'inspector'] as const)('%s installer', (variant) => {
-  const packageName = variant === 'main' ? 'robloxstudio-mcp' : 'robloxstudio-mcp-inspector';
-  const assetName = variant === 'main' ? 'MCPPlugin.rbxmx' : 'MCPInspectorPlugin.rbxmx';
-  const otherAssetName = variant === 'main' ? 'MCPInspectorPlugin.rbxmx' : 'MCPPlugin.rbxmx';
+  const packageName = variant === 'main' ? 'lumen-mcp' : 'lumen-mcp-inspector';
+  const assetName = variant === 'main' ? 'LumenPlugin.rbxmx' : 'LumenInspectorPlugin.rbxmx';
+  const otherAssetName = variant === 'main' ? 'LumenInspectorPlugin.rbxmx' : 'LumenPlugin.rbxmx';
   const version = '9.8.7-dev.1+fixture';
   const asset = (embeddedVersion = version, embeddedVariant: string = variant) => Buffer.from([
     '<roblox version="4"><Item class="Script"><Properties><string name="Source"><![CDATA[',
     `local CURRENT_VERSION = "${embeddedVersion}";`,
     `local PLUGIN_VARIANT = "${embeddedVariant}";`,
-    'local BASE_PORT = 58741;',
-    'local DEFAULT_MCP_URL = "http://localhost:58741";',
-    'local GLOBAL_SETTING_KEY = "MCP_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1";',
-    'local SETTING_KEY_PREFIX = "MCP_LAST_SUCCESSFUL_SERVER_URL_";',
+    'local BASE_PORT = 58761;',
+    'local DEFAULT_MCP_URL = "http://localhost:58761";',
+    'local GLOBAL_SETTING_KEY = "LUMEN_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1";',
+    'local SETTING_KEY_PREFIX = "LUMEN_LAST_SUCCESSFUL_SERVER_URL_";',
     ']]></string></Properties></Item></roblox>',
   ].join('\n'));
   let root: string;
@@ -66,9 +66,6 @@ describe.each(['main', 'inspector'] as const)('%s installer', (variant) => {
   };
   const bundled = () => path.join(packageRoot, 'studio-plugin', assetName);
   const installed = () => path.join(plugins, assetName);
-  const release = () => JSON.stringify({
-    tag_name: `v${version}`, assets: [{ name: assetName, browser_download_url: 'https://example.test/plugin' }],
-  });
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(tmpdir(), 'installer space-ü-'));
@@ -98,7 +95,7 @@ describe.each(['main', 'inspector'] as const)('%s installer', (variant) => {
     });
     const wrapper = path.resolve(__dirname, '../../../', packageName, 'src/install-plugin.ts');
     installer = loadModule(wrapper, pathToFileURL(path.join(packageRoot, 'dist/index.js')).href, {
-      '@chrrxs/robloxstudio-mcp-core': core,
+      'lumen-mcp-core': core,
     }) as Installer;
   });
 
@@ -131,29 +128,18 @@ describe.each(['main', 'inspector'] as const)('%s installer', (variant) => {
     expect(requests).toEqual([]);
   });
 
-  test('bundled-only installation never downloads a missing artifact', async () => {
-    await expect(installer.installBundledPlugin(options)).rejects.toThrow(
+  test.each(['installPlugin', 'installBundledPlugin'] as const)('%s never downloads a missing artifact', async (method) => {
+    await expect(installer[method](options)).rejects.toThrow(
       variant === 'main' ? 'npm run build:plugin in' : 'npm run build:plugin:inspector in',
     );
     expect(requests).toEqual([]);
     expect(fs.existsSync(plugins)).toBe(false);
   });
 
-  test.each([false, true])('downloads only the caller package version (dev=%s)', async (dev) => {
-    responses.push({ body: release() }, { body: asset() });
-    await installer.installPlugin({ ...options, dev });
-    expect(requests).toEqual([
-      { url: `https://api.github.com/repos/chrrxs/robloxstudio-mcp/releases/tags/v${encodeURIComponent(version)}`, userAgent: packageName },
-      { url: 'https://example.test/plugin', userAgent: packageName },
-    ]);
-    expect(fs.readFileSync(installed())).toEqual(asset());
-    expect(options.log).toHaveBeenCalledWith(dev && variant === 'main' ? 'Fetching matching dev release...' : 'Fetching matching release...');
-  });
-
-  test.each(['version', 'variant'] as const)('rejects downloaded %s mismatches before changing either installed edition', async (mismatch) => {
+  test.each(['version', 'variant'] as const)('rejects bundled %s mismatches before changing either installed edition', async (mismatch) => {
     write(installed(), 'existing edition');
     const other = write(path.join(plugins, otherAssetName), 'other edition');
-    responses.push({ body: release() }, { body: mismatch === 'version' ? asset('0.0.0') : asset(version, 'wrong') });
+    write(bundled(), mismatch === 'version' ? asset('0.0.0') : asset(version, 'wrong'));
     await expect(installer.installPlugin(options)).rejects.toThrow(`embeds ${mismatch}`);
     expect(fs.readFileSync(installed(), 'utf8')).toBe('existing edition');
     expect(fs.readFileSync(other, 'utf8')).toBe('other edition');
@@ -173,21 +159,4 @@ describe.each(['main', 'inspector'] as const)('%s installer', (variant) => {
     expect(options.log).toHaveBeenCalledWith(`${assetName} already installed.`);
   });
 
-  test('follows an asset redirect', async () => {
-    responses.push({ body: release() }, { body: '', statusCode: 302, headers: { location: 'https://example.test/redirected' } }, { body: asset() });
-    await installer.installPlugin(options);
-    expect(requests[2].url).toBe('https://example.test/redirected');
-    expect(fs.readFileSync(installed())).toEqual(asset());
-  });
-
-  test.each([
-    ['release error', [{ body: '', statusCode: 404 }], 'GitHub API returned HTTP 404'],
-    ['missing asset', [{ body: JSON.stringify({ tag_name: 'fixture', assets: [] }) }], 'not found in release fixture'],
-    ['download error', [{ body: 'RELEASE' }, { body: '', statusCode: 503 }], 'Download failed: HTTP 503'],
-    ['missing redirect location', [{ body: 'RELEASE' }, { body: '', statusCode: 302 }], 'Redirect with no location'],
-  ] as [string, Response[], string][])('reports %s without creating a plugin directory', async (_label, replies, error) => {
-    responses.push(...replies.map(reply => ({ ...reply, body: reply.body === 'RELEASE' ? release() : reply.body })));
-    await expect(installer.installPlugin(options)).rejects.toThrow(error);
-    expect(fs.existsSync(plugins)).toBe(false);
-  });
 });

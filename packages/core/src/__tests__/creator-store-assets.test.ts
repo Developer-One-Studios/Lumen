@@ -834,19 +834,28 @@ describe('distribution metadata security contract', () => {
   ) as { scripts?: Record<string, string> };
   const distributionSources = [
     'README.md',
+    'docs/install.md',
     'studio-plugin/INSTALLATION.md',
     'studio-plugin/src/modules/Communication.ts',
-    'packages/robloxstudio-mcp/package.json',
-    'packages/robloxstudio-mcp-inspector/package.json',
+    'packages/lumen-mcp/package.json',
+    'packages/lumen-mcp-inspector/package.json',
   ].map((relativePath) => readFileSync(join(repositoryRoot, relativePath), 'utf8'));
+  const packageManifests = ['package.json', 'packages/core/package.json', 'packages/lumen-mcp/package.json', 'packages/lumen-mcp-inspector/package.json']
+    .map((relativePath) => JSON.parse(readFileSync(join(repositoryRoot, relativePath), 'utf8')) as { private?: boolean });
 
-  test('installation instructions and package metadata point only to the upstream project', () => {
+  // Lumen ships only from the team checkout, so an unscoped public package or release download would install someone else's code.
+  test('installation instructions run the local checkout and never fetch a public package or release', () => {
     const combinedSources = distributionSources.join('\n');
 
     expect(combinedSources).not.toContain('Akramle');
-    expect(combinedSources).not.toContain('github:Akramle');
-    expect(combinedSources).toContain('@chrrxs/robloxstudio-mcp@latest');
-    expect(combinedSources).toContain('github.com/chrrxs/robloxstudio-mcp');
+    expect(combinedSources).not.toContain('@latest');
+    expect(combinedSources).not.toContain('npx -y');
+    expect(combinedSources).not.toContain('releases/latest/download');
+    expect(combinedSources).toContain('packages/lumen-mcp/dist/index.js');
+  });
+
+  test('every package is private so npm refuses to publish it', () => {
+    expect(packageManifests.every((manifest) => manifest.private === true)).toBe(true);
   });
 
   test('ordinary package lifecycle hooks cannot install or remove Studio plugins', () => {

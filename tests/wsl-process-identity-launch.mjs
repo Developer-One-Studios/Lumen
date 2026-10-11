@@ -33,7 +33,7 @@ export async function runProcessIdentityRegression({
       env: {
         ...process.env,
         ...worker.environment,
-        ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+        LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
       },
     });
     await client.start();

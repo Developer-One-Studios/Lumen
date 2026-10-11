@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const wrapper = path.join(repoRoot, 'tests', 'run-with-test-port.mjs');
-const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-test-port-wrapper-'));
+const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-test-port-wrapper-'));
 const captureScript = path.join(tempRoot, 'capture-port.mjs');
 
 writeFileSync(captureScript, `
@@ -67,7 +67,7 @@ try {
       Number.isInteger(result.capture.port) && result.capture.port > 0,
       'wrapper assigned a valid port',
     );
-    assert.notEqual(result.capture.port, 58741, 'automatic allocation skips the default plugin port');
+    assert.notEqual(result.capture.port, 58761, 'automatic allocation skips the default plugin port');
     assert.equal(result.capture.autoAssigned, '1', 'child knows its port was automatically assigned');
     assert.equal(result.capture.requirePrimary, '1', 'first server must fail closed instead of proxying');
   }

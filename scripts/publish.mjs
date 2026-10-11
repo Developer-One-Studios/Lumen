@@ -20,8 +20,8 @@ const version = rootPkg.version;
 // Sync version across all packages
 const packageDirs = [
   'packages/core',
-  'packages/robloxstudio-mcp',
-  'packages/robloxstudio-mcp-inspector',
+  'packages/lumen-mcp',
+  'packages/lumen-mcp-inspector',
 ];
 
 console.log(`Syncing version ${version} across all packages...`);
@@ -40,10 +40,10 @@ for (const dir of packageDirs) {
 console.log('\nBuilding all packages...');
 run('npm run build:all');
 
-console.log('\nPublishing robloxstudio-mcp...');
-run('npm publish -w packages/robloxstudio-mcp');
+console.log('\nPublishing lumen-mcp...');
+run('npm publish -w packages/lumen-mcp');
 
-console.log('\nPublishing robloxstudio-mcp-inspector...');
-run('npm publish -w packages/robloxstudio-mcp-inspector');
+console.log('\nPublishing lumen-mcp-inspector...');
+run('npm publish -w packages/lumen-mcp-inspector');
 
 console.log('\nAll packages published successfully!');

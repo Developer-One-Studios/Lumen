@@ -36,21 +36,21 @@ function getStarterPlayerScripts(): Instance | undefined {
 	return StarterPlayer.FindFirstChild("StarterPlayerScripts");
 }
 
-const SERVER_SCRIPT_NAME = "__MCP_ServerEvalBridge";
-const CLIENT_SCRIPT_NAME = "__MCP_ClientEvalBridge";
+const SERVER_SCRIPT_NAME = "__Lumen_ServerEvalBridge";
+const CLIENT_SCRIPT_NAME = "__Lumen_ClientEvalBridge";
 
 // Public so the eval_*_runtime tool wrappers can reference the same names.
 export const BRIDGE_NAMES = {
 	serverScript: SERVER_SCRIPT_NAME,
 	clientScript: CLIENT_SCRIPT_NAME,
-	serverLocal: "__MCP_ServerEvalLocal",
-	clientLocal: "__MCP_ClientEvalBridge",
+	serverLocal: "__Lumen_ServerEvalLocal",
+	clientLocal: "__Lumen_ClientEvalBridge",
 } as const;
 
 // Embedded Luau. The double `${...}` references our exported names so a
 // rename here propagates to both the script source and the tool wrappers.
 const SERVER_BRIDGE_SOURCE = `
--- Installed by @chrrxs/robloxstudio-mcp to power the eval_server_runtime MCP
+-- Installed by lumen-mcp to power the eval_server_runtime MCP
 -- tool (shared-require-cache eval on the server during playtests). Inert
 -- outside Studio (no-ops in live games); safe to leave in place.
 
@@ -78,7 +78,7 @@ end
 `;
 
 const CLIENT_BRIDGE_SOURCE = `
--- Installed by @chrrxs/robloxstudio-mcp to power the eval_client_runtime MCP
+-- Installed by lumen-mcp to power the eval_client_runtime MCP
 -- tool (shared-require-cache eval on the client during playtests). Inert
 -- outside Studio (no-ops in live games); safe to leave in place.
 
@@ -110,7 +110,7 @@ end
 // It's a djb2 hash of the actual bridge source plus the plugin version, so ANY
 // change to the source (or a version bump) yields a new stamp and triggers a
 // runtime refresh instead of keeping a stale bridge.
-const STAMP_ATTR = "__MCPBridgeStamp";
+const STAMP_ATTR = "__LumenBridgeStamp";
 
 function computeBridgeStamp(): string {
 	const combined = `${SERVER_BRIDGE_SOURCE}|${CLIENT_BRIDGE_SOURCE}`;

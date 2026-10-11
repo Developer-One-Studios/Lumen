@@ -9,7 +9,7 @@ export default defineConfig({
   bundle: true,
   splitting: false,
   clean: true,
-  noExternal: ['@chrrxs/robloxstudio-mcp-core'],
+  noExternal: ['lumen-mcp-core'],
   banner: {
     js: '#!/usr/bin/env node',
   },

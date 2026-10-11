@@ -27,9 +27,9 @@ import { createStudioWorkerJob, launchInStudioWorkerJob, STUDIO_WORKER_JOB_ENV }
 import { waitForStudioSignIn } from './studio-sign-in.mjs';
 
 const STUDIO_PROCESS = 'RobloxStudioBeta';
-const DEFAULT_MCP_PORT = Number.parseInt(process.env.ROBLOX_STUDIO_PORT ?? '58741', 10);
+const DEFAULT_MCP_PORT = Number.parseInt(process.env.ROBLOX_STUDIO_PORT ?? '58761', 10);
 export const ISOLATED_STUDIO_PLUGINS_DIR_NAME = 'RsmcpIsolatedPlugins';
-const STUDIO_WORKER_ROOT_NAME = 'robloxstudio-mcp-workers';
+const STUDIO_WORKER_ROOT_NAME = 'lumen-mcp-workers';
 const TEST_PROFILE_MARKER_NAME = 'studio-test-profile.json';
 const TEST_PROFILE_SETUP = 'node scripts/studio-test-profile.mjs setup --user MACHINE\\StudioTests';
 
@@ -74,7 +74,7 @@ function assertWindowsStudioIdentity(identity) {
 }
 
 function testProfileMarkerPath(identity) {
-  return path.join(toWslPath(identity.localAppData), 'robloxstudio-mcp', TEST_PROFILE_MARKER_NAME);
+  return path.join(toWslPath(identity.localAppData), 'lumen-mcp', TEST_PROFILE_MARKER_NAME);
 }
 
 function readTestProfileEnrollment(identity) {

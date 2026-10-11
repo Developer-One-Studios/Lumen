@@ -12,6 +12,7 @@ import { registerResourceHandlers } from './mcp-compat.js';
 import { StudioLaunchPreDispatchError } from './studio-instance-manager.js';
 import type { RobloxStudioTools } from './tools/index.js';
 import type { ToolDefinition } from './tools/definitions.js';
+import { FORK_FEATURES } from './tools/fork/index.js';
 
 export type ProtocolEra = McpRequestContext['era'];
 
@@ -173,7 +174,8 @@ export function normalizeToolResult(raw: unknown, era: ProtocolEra): CallToolRes
     || structured.success === false
     || (typeof structured.error === 'string' && structured.error.length > 0);
 
-  const content = era === 'modern'
+  // Clients such as Claude Code show only content for an error, so a modern error keeps its JSON text too.
+  const content = era === 'modern' && !isError
     ? originalContent.filter((_, index) => index !== jsonTextIndex)
     : [
         { type: 'text' as const, text: JSON.stringify(structured) },
@@ -320,8 +322,26 @@ export function serverInstructions(definitions: readonly ToolDefinition[]): stri
   if (has('get_roblox_docs')) {
     instructions.push('Use get_roblox_docs instead of guessing unfamiliar engine or Luau APIs.');
   }
+  if (has('resolve_source', 'multi_edit')) {
+    instructions.push(
+      'Scripts synced by Rojo are edited on disk, not in Studio; script edit tools refuse them and resolve_source maps Studio paths to files.',
+    );
+  }
+  if (has('perf_stats', 'lag_audit', 'profile_toggle')) {
+    instructions.push(
+      'For lag, start with perf_stats on server and client, then lag_audit for costly content, then profile_toggle to confirm a cause; use the profilers for code hot paths.',
+    );
+  }
+  if (has('inspect_gui', 'simulate_mouse_input')) {
+    instructions.push('Use inspect_gui to find GUI elements and simulate_mouse_input instance_path to click them instead of guessing pixels.');
+  }
+  for (const feature of FORK_FEATURES) {
+    for (const entry of feature.instructions ?? []) {
+      if (has(...entry.tools)) instructions.push(entry.text);
+    }
+  }
 
-  instructions.push('Read robloxstudio://tool-guides for detailed workflows and safety notes.');
+  instructions.push('Read lumen://tool-guides for detailed workflows and safety notes.');
   return instructions.join(' ');
 }
 

@@ -19,18 +19,18 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const prepackScript = path.join(repoRoot, 'scripts', 'prepack.mjs');
 const packages = [
   {
-    directory: 'robloxstudio-mcp',
-    name: '@chrrxs/robloxstudio-mcp',
-    asset: 'MCPPlugin.rbxmx',
+    directory: 'lumen-mcp',
+    name: 'lumen-mcp',
+    asset: 'LumenPlugin.rbxmx',
   },
   {
-    directory: 'robloxstudio-mcp-inspector',
-    name: '@chrrxs/robloxstudio-mcp-inspector',
-    asset: 'MCPInspectorPlugin.rbxmx',
+    directory: 'lumen-mcp-inspector',
+    name: 'lumen-mcp-inspector',
+    asset: 'LumenInspectorPlugin.rbxmx',
   },
 ];
 
-const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), 'robloxstudio-mcp-prepack-'));
+const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), 'lumen-mcp-prepack-'));
 const fixtureScriptsDir = path.join(fixtureRoot, 'scripts');
 mkdirSync(fixtureScriptsDir, { recursive: true });
 copyFileSync(prepackScript, path.join(fixtureScriptsDir, 'prepack.mjs'));
@@ -39,8 +39,8 @@ try {
   const sourcePluginDir = path.join(fixtureRoot, 'studio-plugin');
   mkdirSync(path.join(sourcePluginDir, 'src'), { recursive: true });
   mkdirSync(path.join(sourcePluginDir, 'include'), { recursive: true });
-  writeFileSync(path.join(sourcePluginDir, 'MCPPlugin.rbxmx'), 'main-built-plugin');
-  writeFileSync(path.join(sourcePluginDir, 'MCPInspectorPlugin.rbxmx'), 'inspector-built-plugin');
+  writeFileSync(path.join(sourcePluginDir, 'LumenPlugin.rbxmx'), 'main-built-plugin');
+  writeFileSync(path.join(sourcePluginDir, 'LumenInspectorPlugin.rbxmx'), 'inspector-built-plugin');
   writeFileSync(path.join(sourcePluginDir, 'src', 'source.ts'), 'source-only');
   writeFileSync(path.join(sourcePluginDir, 'include', 'LibMP.lua'), 'large-runtime-source');
 
@@ -95,7 +95,7 @@ try {
     );
     assert.equal(
       readFileSync(path.join(destination, packageDefinition.asset), 'utf8'),
-      packageDefinition.asset === 'MCPPlugin.rbxmx'
+      packageDefinition.asset === 'LumenPlugin.rbxmx'
         ? 'main-built-plugin'
         : 'inspector-built-plugin',
     );

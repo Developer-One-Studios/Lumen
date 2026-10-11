@@ -27,7 +27,7 @@ const EXPECTED_PHYSICAL_STREAMS = STUDIO_COUNT * 2;
 const LAUNCH_TIMEOUT_MS = 120_000;
 const CONNECTION_TIMEOUT_MS = 120_000;
 const POLL_MS = 500;
-const WORKTREE_PLUGIN = path.join(REPO_ROOT, 'studio-plugin', 'MCPPlugin.rbxmx');
+const WORKTREE_PLUGIN = path.join(REPO_ROOT, 'studio-plugin', 'LumenPlugin.rbxmx');
 
 function asError(error) {
   return error instanceof Error ? error : new Error(String(error));
@@ -57,7 +57,7 @@ function workerEnvironment(worker, port, workerIndex, { requirePrimary }) {
     ROBLOX_STUDIO_PORT: String(port),
     RSMCP_AUTO_ASSIGNED_PORT: '0',
     RSMCP_STUDIO_WORKING_DIRECTORY: worker.workingDirectory,
-    ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+    LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
   };
   env.ROBLOX_STUDIO_REQUIRE_PRIMARY = requirePrimary ? '1' : '0';
 
@@ -80,7 +80,7 @@ async function installPlugin(worker, port, workerIndex) {
     throw new Error(`Plugin installer ${workerIndex + 1} exited ${signal ?? code ?? 1}`);
   }
 
-  const pluginPath = path.join(worker.pluginsDirectory, 'MCPPlugin.rbxmx');
+  const pluginPath = path.join(worker.pluginsDirectory, 'LumenPlugin.rbxmx');
   const expectedUrl = `http://localhost:${port}`;
   if (!readFileSync(pluginPath, 'utf8').includes(expectedUrl)) {
     throw new Error(`Studio ${workerIndex + 1} plugin is missing shared bridge URL ${expectedUrl}`);
@@ -360,7 +360,7 @@ async function assertScopedRuntimeLogs(control, instanceId, expectedRoles, label
   const logs = await control.callTool('get_runtime_logs', {
     instance_id: instanceId,
     tail: 10,
-    filter: '__MCP_LOG_TIMEOUT_PROBE__',
+    filter: '__Lumen_LOG_TIMEOUT_PROBE__',
   }, 10_000);
   const elapsedMs = Math.round(performance.now() - startedAt);
   if (logs.instanceId !== instanceId || !Array.isArray(logs.entries) || logs.entries.length !== 0) {

@@ -13,7 +13,7 @@ import { acquireStudioTestLease } from './lib/studio-test-lease.mjs';
 const leaseRoot = mkdtempSync(path.join(os.tmpdir(), 'rsmcp-studio-lease-test-'));
 const name = `unit-${process.pid}-${randomUUID()}`;
 const pluginsDir = path.join(leaseRoot, 'Plugins');
-const protectedPlugin = path.join(pluginsDir, 'MCPPlugin.rbxmx');
+const protectedPlugin = path.join(pluginsDir, 'LumenPlugin.rbxmx');
 const reproPlugin = path.join(pluginsDir, '000_RSMCP_EditHistoryRepro.rbxmx');
 mkdirSync(pluginsDir);
 writeFileSync(protectedPlugin, 'original plugin');

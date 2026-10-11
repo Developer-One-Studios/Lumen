@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($commonData) -or -not [IO.Path]::IsPathRooted($
     throw 'Windows did not provide an absolute CommonApplicationData folder for Studio test snapshots.'
 }
 $commonData = [IO.Path]::GetFullPath($commonData)
-$root = [IO.Path]::GetFullPath([IO.Path]::Combine($commonData, 'robloxstudio-mcp-tests-' + $sourceSid.Value))
+$root = [IO.Path]::GetFullPath([IO.Path]::Combine($commonData, 'lumen-mcp-tests-' + $sourceSid.Value))
 
 if (-not $Initialize) {
     # Expected-root derivation must work without inspecting or creating any directory.

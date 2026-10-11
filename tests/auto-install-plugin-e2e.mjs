@@ -32,17 +32,17 @@ import {
 
 const VARIANTS = {
   main: {
-    packageName: '@chrrxs/robloxstudio-mcp',
-    workspace: 'packages/robloxstudio-mcp',
-    asset: 'MCPPlugin.rbxmx',
-    otherAsset: 'MCPInspectorPlugin.rbxmx',
+    packageName: 'lumen-mcp',
+    workspace: 'packages/lumen-mcp',
+    asset: 'LumenPlugin.rbxmx',
+    otherAsset: 'LumenInspectorPlugin.rbxmx',
     variant: 'main',
   },
   inspector: {
-    packageName: '@chrrxs/robloxstudio-mcp-inspector',
-    workspace: 'packages/robloxstudio-mcp-inspector',
-    asset: 'MCPInspectorPlugin.rbxmx',
-    otherAsset: 'MCPPlugin.rbxmx',
+    packageName: 'lumen-mcp-inspector',
+    workspace: 'packages/lumen-mcp-inspector',
+    asset: 'LumenInspectorPlugin.rbxmx',
+    otherAsset: 'LumenPlugin.rbxmx',
     variant: 'inspector',
   },
 };
@@ -302,8 +302,8 @@ function installedPluginMatchesArtifact(
 ) {
   const artifact = readFileSync(artifactPath);
   const installed = readFileSync(installedPath);
-  const configuredPort = Number(port ?? 58741);
-  if (configuredPort === 58741) {
+  const configuredPort = Number(port ?? 58761);
+  if (configuredPort === 58761) {
     return artifact.length === installed.length && artifact.equals(installed);
   }
 
@@ -312,14 +312,14 @@ function installedPluginMatchesArtifact(
   return version !== undefined
     && installedText.includes(`local CURRENT_VERSION = "${version}"`)
     && installedText.includes(`http://localhost:${configuredPort}`)
-    && installedText.includes(`MCP_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1_PORT_${configuredPort}`)
-    && !installedText.includes('http://localhost:58741');
+    && installedText.includes(`LUMEN_LAST_SUCCESSFUL_SERVER_URL_GLOBAL_V1_PORT_${configuredPort}`)
+    && !installedText.includes('http://localhost:58761');
 }
 
 
 function removeVariantFiles(pluginsDir) {
-  rmSync(path.join(pluginsDir, 'MCPPlugin.rbxmx'), { force: true });
-  rmSync(path.join(pluginsDir, 'MCPInspectorPlugin.rbxmx'), { force: true });
+  rmSync(path.join(pluginsDir, 'LumenPlugin.rbxmx'), { force: true });
+  rmSync(path.join(pluginsDir, 'LumenInspectorPlugin.rbxmx'), { force: true });
 }
 
 function packTarballPath(stdout, destination) {
@@ -363,14 +363,14 @@ async function ensureLocalBuild(tmpRoot) {
   await runChecked('node', ['scripts/build-plugin.mjs', '--variant', 'inspector'], {
     env: {
       MCP_PLUGINS_DIR: buildInstallDir,
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
     },
     timeoutMs: 120000,
   });
   await runChecked('node', ['scripts/build-plugin.mjs'], {
     env: {
       MCP_PLUGINS_DIR: buildInstallDir,
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
     },
     timeoutMs: 120000,
   });
@@ -455,7 +455,7 @@ async function smokeAutoInstall(artifact, tmpRoot) {
       env: {
         ...SERVER_ENV,
         MCP_PLUGINS_DIR: smokePluginsDir,
-        ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
+        LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
         ROBLOX_STUDIO_PORT: String(portLease.port),
         ROBLOX_STUDIO_REQUIRE_PRIMARY: '1',
       },
@@ -542,7 +542,7 @@ async function startClient(label, artifact, { autoInstall }) {
             ...studioIsolation.environment,
             MCP_PLUGINS_DIR: studioIsolation.pluginsDirectory,
             RSMCP_STUDIO_WORKING_DIRECTORY: studioIsolation.workingDirectory,
-            ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
+            LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
           }
         : {}),
     },
@@ -696,7 +696,7 @@ async function writeMismatchedPlugin(artifact, pluginsDir) {
     env: {
       ...SERVER_ENV,
       MCP_PLUGINS_DIR: pluginsDir,
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: studioIsolation.managedInstanceRegistryDirectory,
       ROBLOX_STUDIO_PORT: String(BASE_PORT),
     },
     timeoutMs: 30000,
@@ -926,7 +926,7 @@ async function main() {
     );
   }
 
-  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), 'robloxstudio-mcp-e2e-'));
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), 'lumen-mcp-e2e-'));
   studioIsolation = await createIsolatedStudioDirectory({ prefix: 'auto-install-e2e' });
   const pluginsDir = studioIsolation.pluginsDirectory;
 

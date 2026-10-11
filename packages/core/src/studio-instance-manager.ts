@@ -96,7 +96,7 @@ export type StudioProcessSnapshot =
   | { status: 'ok'; observedAt: number; processes: StudioProcessInfo[] }
   | { status: 'error'; observedAt: number; error: string };
 
-const BASEPLATE_TEMP_DIR = path.join(os.tmpdir(), 'robloxstudio-mcp-baseplates');
+const BASEPLATE_TEMP_DIR = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
 const BASEPLATE_TEMP_NAME = /^Baseplate-\d+-\d+\.rbxl$/;
 const BASEPLATE_TEMPLATE_NAME = 'Baseplate.rbxl';
 
@@ -1182,7 +1182,7 @@ function resolveBaseplateTemplatePath(): string {
       path.join(entrypointDir, '..', 'assets', BASEPLATE_TEMPLATE_NAME),
     ] : []),
     path.join(process.cwd(), 'packages', 'core', 'assets', BASEPLATE_TEMPLATE_NAME),
-    path.join(process.cwd(), 'packages', 'robloxstudio-mcp', 'dist', 'assets', BASEPLATE_TEMPLATE_NAME),
+    path.join(process.cwd(), 'packages', 'lumen-mcp', 'dist', 'assets', BASEPLATE_TEMPLATE_NAME),
     path.join(process.cwd(), 'assets', BASEPLATE_TEMPLATE_NAME),
   ];
   for (const candidate of candidates) {
@@ -2709,7 +2709,7 @@ export class StudioInstanceManager {
 
   private reportBackgroundFailure(context: string, error: unknown): void {
     console.warn(
-      `[robloxstudio-mcp] failed while ${context}: ${error instanceof Error ? error.message : String(error)}`,
+      `[lumen-mcp] failed while ${context}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 

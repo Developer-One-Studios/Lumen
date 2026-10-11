@@ -2,6 +2,8 @@ import { getReadOnlyTools, TOOL_DEFINITIONS } from '../tools/definitions.js';
 import { TOOL_HANDLERS } from '../http-server.js';
 import { RobloxStudioTools } from '../tools/index.js';
 import { BridgeService } from '../bridge-service.js';
+import { ForkTools } from '../tools/fork-tools.js';
+import { FORK_FEATURES } from '../tools/fork/index.js';
 import { TOOL_GUIDE_MARKDOWN } from '../mcp-compat.js';
 
 type JsonSchema = Record<string, unknown>;
@@ -224,7 +226,33 @@ describe('Tool schema compatibility', () => {
     'manage_instance',
     'get_roblox_docs',
     'get_roblox_skills',
+    'resolve_source',
+    ...FORK_FEATURES.flatMap((feature) => feature.studioAgnostic ?? []),
   ]);
+
+  // Feature modules handle their own routing; their handler itself must read body.instance_id.
+  const FEATURE_TOOLS = new Set(FORK_FEATURES.flatMap((feature) => feature.definitions.map((definition) => definition.name)));
+
+  // Fork tools hand the whole body to a ForkTools method, which reads instance_id itself.
+  const FORK_METHODS: Record<string, keyof ForkTools> = {
+    perf_stats: 'perfStats',
+    lag_audit: 'lagAudit',
+    profile_toggle: 'profileToggle',
+    leak_check: 'leakCheck',
+    replication_diff: 'replicationDiff',
+    fuzz_remotes: 'fuzzRemotes',
+    inspect_gui: 'inspectGui',
+    navigate_character: 'navigateCharacter',
+    multi_edit: 'multiEdit',
+    run_tests: 'runTests',
+    audit_assets: 'auditAssets',
+    datastore_read: 'datastoreRead',
+  };
+
+  function forkMethodSource(toolName: string): string | undefined {
+    const method = FORK_METHODS[toolName];
+    return method ? String(ForkTools.prototype[method]) : undefined;
+  }
 
   function toolHandlerBody(toolName: string): string {
     const handler = TOOL_HANDLERS[toolName];
@@ -248,7 +276,7 @@ describe('Tool schema compatibility', () => {
     const offenders: string[] = [];
     for (const tool of TOOL_DEFINITIONS) {
       if (STUDIO_AGNOSTIC_TOOLS.has(tool.name)) continue;
-      const body = toolHandlerBody(tool.name);
+      const body = forkMethodSource(tool.name) ?? toolHandlerBody(tool.name);
       if (!body.includes('body.instance_id')) {
         offenders.push(tool.name);
       }
@@ -312,6 +340,11 @@ describe('Tool schema compatibility', () => {
     };
     for (const tool of TOOL_DEFINITIONS) {
       if (STUDIO_AGNOSTIC_TOOLS.has(tool.name)) continue;
+      const forkSource = forkMethodSource(tool.name) ?? (FEATURE_TOOLS.has(tool.name) ? toolHandlerBody(tool.name) : undefined);
+      if (forkSource !== undefined) {
+        if (!forkSource.includes('instance_id')) offenders.push(`${tool.name} (fork handler ignores instance_id)`);
+        continue;
+      }
       const methodName = methodNameOf[tool.name];
       if (!methodName) {
         offenders.push(`${tool.name} (no method-name mapping; add to test)`);

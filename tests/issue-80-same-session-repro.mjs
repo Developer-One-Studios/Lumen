@@ -133,12 +133,12 @@ try {
     ].join('\n'));
     stdio = new StdioClientTransport({
       command: process.execPath,
-      args: ['--import', preload, resolve(process.env.ISSUE80_SERVER ?? 'packages/robloxstudio-mcp/dist/index.js')],
+      args: ['--import', preload, resolve(process.env.ISSUE80_SERVER ?? 'packages/lumen-mcp/dist/index.js')],
       env: {
         PATH: process.env.PATH, HOME: scratch,
         ROBLOX_STUDIO_PORT: String(server.address().port),
         ROBLOX_STUDIO_HOST: '127.0.0.1', ROBLOX_STUDIO_NO_AUTH: '1',
-        ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: join(scratch, 'registry'),
+        LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: join(scratch, 'registry'),
       },
       stderr: 'pipe',
     });

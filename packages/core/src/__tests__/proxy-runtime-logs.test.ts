@@ -1,5 +1,6 @@
 import { BridgeService, MultiplayerGroupInUseError, RequestFailure } from '../bridge-service.js';
 import { ProxyBridgeService } from '../proxy-bridge-service.js';
+import { proxyChallengeProof } from '../auth.js';
 import { RobloxStudioTools } from './test-tools.js';
 
 interface RuntimeLogResult {
@@ -49,6 +50,10 @@ async function fixture(authToken?: string) {
   register('client-1');
   register('edit', 'instance:other');
   const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    if (String(input).startsWith('http://primary/proxy-challenge?nonce=')) {
+      const nonce = new URL(String(input)).searchParams.get('nonce') ?? '';
+      return jsonResponse({ proof: authToken ? proxyChallengeProof(authToken, nonce) : '' });
+    }
     if (String(input) === 'http://primary/topology') return jsonResponse(primary.getTopologySnapshot());
     if (String(input) === 'http://primary/remove-multiplayer-group') {
       const removal: unknown = JSON.parse(String(init?.body));
@@ -214,7 +219,10 @@ describe('proxy runtime logs across lifecycle transitions', () => {
   test('routing topology GET carries the primary authentication token', async () => {
     const harness = await fixture('test-primary-token');
     try {
-      harness.fetchMock.mockImplementationOnce(async (input, init) => {
+      const fallback = harness.fetchMock.getMockImplementation()!;
+      harness.fetchMock.mockImplementation(async (input, init) => {
+        if (String(input).startsWith('http://primary/proxy-challenge')) return fallback(input, init);
+        harness.fetchMock.mockImplementation(fallback);
         expect(String(input)).toBe('http://primary/topology');
         expect(init?.method ?? 'GET').toBe('GET');
         if (new Headers(init?.headers).get('X-MCP-Auth') !== 'test-primary-token') {
@@ -224,6 +232,26 @@ describe('proxy runtime logs across lifecycle transitions', () => {
       });
       await harness.tools.getRuntimeLogs('instance:test');
       expect(harness.forwarded).toEqual(['instance:test/edit', 'instance:test/server', 'instance:test/client-1']);
+    } finally {
+      harness.close();
+      await jest.advanceTimersByTimeAsync(0);
+    }
+  });
+
+  test('a port squatter that cannot prove the token never receives it', async () => {
+    const harness = await fixture('test-primary-token');
+    try {
+      const seenTokens: Array<string | null> = [];
+      harness.fetchMock.mockImplementation(async (input, init) => {
+        seenTokens.push(new Headers(init?.headers).get('X-MCP-Auth'));
+        if (String(input).startsWith('http://primary/proxy-challenge')) return jsonResponse({ proof: '00'.repeat(32) });
+        return jsonResponse(harness.primary.getTopologySnapshot());
+      });
+      await jest.advanceTimersByTimeAsync(3_000);
+      await expect(harness.tools.getRuntimeLogs('instance:test')).rejects.toThrow(/could not prove/);
+      expect(seenTokens.length).toBeGreaterThan(0);
+      expect(seenTokens.every((token) => token === null)).toBe(true);
+      expect(harness.forwarded).toEqual([]);
     } finally {
       harness.close();
       await jest.advanceTimersByTimeAsync(0);

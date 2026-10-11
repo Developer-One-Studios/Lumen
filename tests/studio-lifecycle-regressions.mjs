@@ -27,7 +27,7 @@ for _, holder in ipairs(holders) do
   local ok, attributes = pcall(function() return holder:GetAttributes() end)
   if ok then
     for name in pairs(attributes) do
-      if string.sub(name, 1, 5) == "__MCP" then table.insert(found, holder.ClassName .. "." .. name) end
+      if string.sub(name, 1, 5) == "__Lumen" then table.insert(found, holder.ClassName .. "." .. name) end
     end
   end
 end
@@ -70,11 +70,11 @@ function stringAttributeBlob(attributes) {
 }
 
 function lifecyclePlaceXml() {
-  const attributes = stringAttributeBlob({ __MCPPlaceId: PLACE_UUID });
+  const attributes = stringAttributeBlob({ __LumenPlaceId: PLACE_UUID });
   const savedTopology = stringAttributeBlob({
-    __MCPTopologyMode: 'shared',
-    __MCPTopologyInstanceId: SAVED_INSTANCE_ID,
-    __MCPTopologyToken: 'saved-session-token',
+    __LumenTopologyMode: 'shared',
+    __LumenTopologyInstanceId: SAVED_INSTANCE_ID,
+    __LumenTopologyToken: 'saved-session-token',
   });
   return `<?xml version="1.0" encoding="utf-8"?>
 <roblox version="4">
@@ -201,7 +201,7 @@ async function assertNoMcpAttributes(client, instanceId, label) {
     code: MCP_ATTRIBUTE_PROBE,
   });
   assert(probe.success === true && probe.returnValue === '0:',
-    `${label}: edit DataModel carries no __MCP attributes (${JSON.stringify(probe.returnValue ?? probe)})`);
+    `${label}: edit DataModel carries no __Lumen attributes (${JSON.stringify(probe.returnValue ?? probe)})`);
 }
 
 async function waitForServerPeer(instanceId, label) {
@@ -262,7 +262,7 @@ async function main() {
         ...worker.environment,
         MCP_PLUGINS_DIR: worker.pluginsDirectory,
         RSMCP_STUDIO_WORKING_DIRECTORY: worker.workingDirectory,
-        ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+        LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
       },
       startupTimeoutMs: 60000,
     });
@@ -293,7 +293,7 @@ async function main() {
     const cachedIdentity = await client.callTool('execute_luau', {
       instance_id: firstInstanceId,
       target: 'edit',
-      code: 'local identity = game:GetService("CoreGui"):FindFirstChild("__MCPSessionIdentity"); assert(identity and identity:IsA("StringValue") and not identity.Archivable); return identity.Value',
+      code: 'local identity = game:GetService("CoreGui"):FindFirstChild("__LumenSessionIdentity"); assert(identity and identity:IsA("StringValue") and not identity.Archivable); return identity.Value',
     });
     assert(cachedIdentity.success === true && cachedIdentity.returnValue === firstInstanceId,
       'native session identity uses a non-archivable CoreGui cache');

@@ -1,17 +1,17 @@
 # tests/
 
-Integration tests that drive a live `@chrrxs/robloxstudio-mcp` subprocess via
+Integration tests that drive a live `lumen-mcp` subprocess via
 stdio MCP, exercising real Studio behavior through the plugin. Each test
 spawns its own subprocess and is responsible for cleaning up any playtest
 state it starts.
 
 ## Prerequisites
 
-1. **The built server dist** at `packages/robloxstudio-mcp/dist/index.js` —
+1. **The built server dist** at `packages/lumen-mcp/dist/index.js` —
    run `npm run build` when it is stale.
 2. **Plugin build dependencies** under `studio-plugin/node_modules` — install
    them with `npm ci --prefix studio-plugin`. The managed Studio gates rebuild
-   `studio-plugin/MCPPlugin.rbxmx` from the current worktree, then install that
+   `studio-plugin/LumenPlugin.rbxmx` from the current worktree, then install that
    exact file into an isolated directory; they never download a published
    plugin as a fallback. Run `npm run build:plugin` before individual test
    scripts that reuse an already-open Studio instance.

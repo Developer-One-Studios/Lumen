@@ -1,160 +1,65 @@
-# Roblox Studio MCP Plugin Installation Guide
+# Lumen Studio plugin
 
-Complete your AI assistant integration with this easy-to-install Studio plugin. Works with Claude Code, Claude Desktop, and any MCP-compatible AI.
+The Lumen plugin connects Roblox Studio to the Lumen server that your AI agent runs.
+It is built from this repository, so there is no Creator Store listing and no download link.
 
-## Quick Installation
+## Installing
 
-### Method 1: Roblox Creator Store (Easiest)
-1. **Install from Creator Store:**
-   - Visit: https://create.roblox.com/store/asset/132985143757536
-   - Click **"Install"** button
-   - Plugin automatically opens in Studio
+Follow [docs/install.md](../docs/install.md).
+In short, `npm run build:plugin` builds `LumenPlugin.rbxmx` and copies it into Studio's Plugins folder on Windows and macOS.
+On Linux, run `npm run build:plugin:artifact` and then `node packages/lumen-mcp/dist/index.js --install-plugin`.
 
-2. **No restart needed** - Plugin appears immediately in toolbar!
+To copy it by hand, put `studio-plugin/LumenPlugin.rbxmx` into the Plugins folder:
 
-### Method 2: CLI Installer
-Run the installer bundled with the latest server package:
+- Windows: `%LOCALAPPDATA%\Roblox\Plugins`
+- macOS: `~/Documents/Roblox/Plugins`
+- Any platform: in Studio, open **Plugins > Plugins Folder**.
 
-```bash
-npx -y @chrrxs/robloxstudio-mcp@latest --install-plugin
-```
+Keep only one edition in that folder.
+Remove `LumenInspectorPlugin.rbxmx` when you install `LumenPlugin.rbxmx`, and the other way around.
+Fully close and reopen Studio after installing or updating.
 
-Fully close and reopen Roblox Studio after the plugin is installed or updated.
+## Using it
 
-### Method 3: Direct Download
-1. Download [MCPPlugin.rbxmx](https://github.com/chrrxs/robloxstudio-mcp/releases/latest/download/MCPPlugin.rbxmx).
-2. Save it to the Studio Plugins folder:
-   - **Windows**: `%LOCALAPPDATA%/Roblox/Plugins/`
-   - **macOS**: `~/Documents/Roblox/Plugins/`
-   - **From Studio**: Open **Plugins > Plugins Folder**, then copy the file there.
-   - Keep only one MCP variant in this folder. Remove `MCPInspectorPlugin.rbxmx` when installing `MCPPlugin.rbxmx`.
-3. Fully close and reopen Roblox Studio.
+The plugin adds a **Lumen** toolbar with one button.
 
-## Setup & Configuration
+| Button | Meaning |
+| --- | --- |
+| Red | No Lumen server is running. Start a session in your agent. |
+| Yellow | Connecting. |
+| Green | Connected, and your agent can use Studio. |
 
-### Optional: Allow third-party Creator Store assets
+The button also opens a small panel with the connection steps and the server URL.
+The plugin connects by itself whenever a Lumen server starts, so you rarely need to click it.
 
-To preview or insert public Creator Store assets that you do not own, enable
-**"Allow Loading Third Party Assets"** under
-**Game Settings** > **Security**.
-Roblox disables this setting by default.
+To preview or insert public Creator Store assets you do not own, turn on **Allow Loading Third Party Assets** under **Game Settings > Security**.
 
-### 1. Activate the Plugin
-**Plugins toolbar** > Click **"MCP Server"** button
-- **Green status** = Connected and ready
-- **Red status** = Disconnected (normal until MCP server runs)
+## How it works
 
-### 2. Install MCP Server
-Choose your AI assistant:
+1. Your agent calls a tool, and the Lumen server queues the request.
+2. The plugin receives it over an authenticated WebSocket.
+3. The plugin runs the Studio API calls in the right DataModel: edit, the playtest server, or a client.
+4. Progress and the result travel back over the same socket.
 
-**For Claude Code:**
-```bash
-claude mcp add robloxstudio -- npx -y @chrrxs/robloxstudio-mcp@latest --auto-install-plugin
-```
-
-**For Codex CLI:**
-```bash
-codex mcp add robloxstudio -- npx -y @chrrxs/robloxstudio-mcp@latest --auto-install-plugin
-```
-
-**For Claude Desktop/Others:**
-```json
-{
-  "mcpServers": {
-    "robloxstudio-mcp": {
-      "command": "npx",
-      "args": ["-y", "@chrrxs/robloxstudio-mcp@latest", "--auto-install-plugin"]
-    }
-  }
-}
-```
-
-`@latest` floats the server package to the newest npm release. `--auto-install-plugin` copies the matching `.rbxmx` bundled with that package into Studio's Plugins folder when the server starts.
-
-The plugin and server must have matching versions. If Studio cannot connect after an update, restart the MCP server with `--auto-install-plugin`, then fully close and reopen Studio so it loads the matching bundled plugin file.
-
-<details>
-<summary>Note for native Windows users</summary>
-If you encounter issues, you may need to run it through `cmd`. Update your configuration like this:
-
-```json
-{
-  "mcpServers": {
-    "robloxstudio-mcp": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@chrrxs/robloxstudio-mcp@latest", "--auto-install-plugin"]
-    }
-  }
-}
-```
-</details>
-
-## How It Works
-
-1. **AI calls tool** > MCP server queues request
-2. **Plugin receives it** over an authenticated persistent WebSocket
-3. **Plugin executes** Studio API calls
-4. **Plugin sends progress and the response** over the same socket; the server acknowledges retained responses
-5. **AI receives** comprehensive Studio information
-
-**Available Tools:** 37+ specialized tools for file trees, scripts, properties, attributes, tags, and more!
+During playtests the server and each client connect as their own peers, and client requests run only with a ticket the server peer issued.
 
 ## Troubleshooting
 
-### Plugin Missing from Toolbar
-- Verify file saved to correct plugins folder
-- Restart Roblox Studio completely
-- Check Output window for error messages
+| Problem | Fix |
+| --- | --- |
+| No Lumen toolbar | Check the file is in the Plugins folder, then restart Studio completely and look for errors in the Output window. |
+| The button stays red | Normal until your agent starts Lumen. Reconnect the server from your agent, for example with `/mcp` in Claude Code. |
+| It connects and drops again | The plugin and server come from different builds. Rebuild both as in [docs/install.md](../docs/install.md#updating) and restart Studio. |
+| Firewall prompt on Windows | Allow Node.js on private networks. Lumen only uses `localhost:58761`. |
 
-### Plugin Shows "Disconnected"
-- **Normal behavior** when MCP server isn't running
-- Click "MCP Server" button to activate
-- Install MCP server using commands above
+## Settings
 
-### Connection Issues
-- Check Windows Firewall isn't blocking localhost:58741
-- Restart both Studio and your AI assistant
-- Check Studio Output window for detailed error messages
+- **Server URL**: the panel has one URL field, `http://localhost:58761` by default. The plugin only accepts and remembers loopback addresses.
+- **Several places**: every open place connects to the same server, and agents pick one with `get_connected_instances` and `instance_id`.
 
-## Security & Privacy
+## Privacy
 
-- **Local bridge by default**: The plugin connects to `http://localhost:58741`
-  unless you explicitly configure another server URL.
-- **Explicit tool access**: The full plugin can modify a place when a write tool
-  is called. Install the Inspector edition when you need read-only access.
-- **Provider boundary**: Tool results pass through your configured MCP client.
-  Your AI provider's data-handling policy applies to content sent by that
-  client.
-
-See the repository's
-[configuration guide](../docs/configuration.md) for HTTP bridge authentication
-and network settings. Report suspected vulnerabilities through the
-[security policy](../SECURITY.md), not a public issue.
-
-## Advanced Usage
-
-### Plugin Features
-- **Real-time status**: Visual connection indicators
-- **Persistent delivery**: One authenticated WebSocket per edit or play-server peer
-- **Multiplexed playtests**: Client routes share the play-server socket
-- **Bounded recovery**: Reconnection resends retained progress/responses, not commands; use saved operation IDs and [verified staging/recovery](../docs/large-inputs.md) instead of blindly replaying mutations
-- **Debug friendly**: Comprehensive logging in Output window
-
-### Customization
-- **Server URL**: Modify the single plugin URL field (default: http://localhost:58741)
-- **Multiple Studio places**: Connect every place to the same MCP server, then use `get_connected_instances` and `instance_id` to choose the target game
-- **Timeout semantics**: A request waiter's timeout is not an execution deadline or rollback; inspect `get_request_status` and actual effects before retrying
-
-### Development Mode
-```lua
--- Enable debug logging in plugin code:
-local DEBUG_MODE = true
-```
-
-## Pro Tips
-
-- **Keep Studio open** while using AI assistants
-- **Plugin auto-connects** when MCP server starts
-- **Monitor status** via the dock widget
-- **Use AI tools** to explore game architecture, find bugs, analyze dependencies
-- **Perfect for** code reviews, debugging, and understanding complex projects!
+The full plugin can change a place whenever your agent calls a write tool.
+Install the Inspector edition when you only want read access.
+Tool results go to your AI agent, so your AI provider's data policy applies to what it sends.
+See [SECURITY.md](../SECURITY.md) for the security model and how to report a problem.

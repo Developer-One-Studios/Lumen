@@ -1,18 +1,19 @@
 {
-  "name": "@chrrxs/robloxstudio-mcp",
-  "version": "3.2.0",
-  "description": "MCP server for testing, debugging, and controlling Roblox Studio from AI coding tools",
+  "name": "lumen-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lumen: an MCP server that lets AI agents test, profile and debug Roblox Studio",
   "main": "dist/index.js",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "bin": {
-    "robloxstudio-mcp": "dist/index.js"
+    "lumen-mcp": "dist/index.js"
   },
   "files": [
     "dist/**/*",
-    "studio-plugin/MCPPlugin.rbxmx"
+    "studio-plugin/LumenPlugin.rbxmx"
   ],
   "scripts": {
     "build": "tsup",
@@ -27,16 +28,8 @@
     "model-context-protocol",
     "game-development"
   ],
-  "author": "",
+  "author": "Developer One Studios",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/chrrxs/robloxstudio-mcp.git"
-  },
-  "homepage": "https://github.com/chrrxs/robloxstudio-mcp#readme",
-  "bugs": {
-    "url": "https://github.com/chrrxs/robloxstudio-mcp/issues"
-  },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
@@ -45,6 +38,6 @@
     "ws": "^8.14.2"
   },
   "devDependencies": {
-    "@chrrxs/robloxstudio-mcp-core": "*"
+    "lumen-mcp-core": "*"
   }
 }

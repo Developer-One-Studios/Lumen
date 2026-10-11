@@ -1,4 +1,6 @@
+import { lookup } from 'node:dns/promises';
 import { open } from 'node:fs/promises';
+import { BlockList, isIP } from 'node:net';
 import { resolve } from 'node:path';
 import { HTTP_BODY_LIMIT_BYTES } from './http-body-limits.js';
 import { MAX_STUDIO_FRAME_BYTES } from './studio-transport.js';
@@ -8,6 +10,39 @@ import { MAX_STUDIO_FRAME_BYTES } from './studio-transport.js';
 // still performs its exact serialized-frame admission check before dispatch.
 const ENVELOPE_RESERVE_BYTES = 16 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
+const MAX_REDIRECTS = 5;
+
+export type HostResolver = (hostname: string) => Promise<string[]>;
+
+const defaultResolver: HostResolver = async (hostname) =>
+  (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
+
+// Loopback, LAN and link-local hosts are refused so a tool argument cannot reach services that only trust this machine.
+const LOCAL_ADDRESSES = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+  ['172.16.0.0', 12], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as const) LOCAL_ADDRESSES.addSubnet(network, prefix, 'ipv4');
+for (const [network, prefix] of [
+  ['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+] as const) LOCAL_ADDRESSES.addSubnet(network, prefix, 'ipv6');
+
+function isLocalAddress(address: string): boolean {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (mapped) return LOCAL_ADDRESSES.check(mapped[1], 'ipv4');
+  return LOCAL_ADDRESSES.check(address, isIP(address) === 6 ? 'ipv6' : 'ipv4');
+}
+
+async function assertPublicUrl(url: URL, resolveHost: HostResolver): Promise<void> {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`import_rbxm url must use http(s); got ${url.protocol}`);
+  }
+  const hostname = url.hostname.replace(/^\[|\]$/g, '');
+  const addresses = isIP(hostname) ? [hostname] : await resolveHost(hostname);
+  if (addresses.length === 0 || addresses.some(isLocalAddress)) {
+    throw new Error(`import_rbxm refuses ${url.host}: it resolves to a loopback, private or link-local address.`);
+  }
+}
 
 export function rbxmInputByteLimit(parentPath: string, sourceLabel: string): number {
   const metadataBytes = Buffer.byteLength(JSON.stringify({
@@ -53,6 +88,7 @@ export async function readRbxmInput(
   source: { path?: string; url?: string; base64?: string },
   parentPath: string,
   signal?: AbortSignal,
+  resolveHost: HostResolver = defaultResolver,
 ): Promise<{ bytes: Buffer; sourceLabel: string }> {
   const modes = ['path', 'url', 'base64'] as const;
   const provided = modes.filter((key) => source[key] !== undefined);
@@ -86,15 +122,21 @@ export async function readRbxmInput(
     }
   }
   if (source.url !== undefined) {
-    const url = new URL(source.url);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      throw new Error(`import_rbxm url must use http(s); got ${url.protocol}`);
-    }
+    let url = new URL(source.url);
     const limit = rbxmInputByteLimit(parentPath, source.url);
     const deadline = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
-    const response = await fetch(url, {
-      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
-    });
+    const fetchSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    // Redirects are followed by hand so every hop gets the same host check.
+    let response: Response;
+    for (let hop = 0; ; hop++) {
+      await assertPublicUrl(url, resolveHost);
+      response = await fetch(url, { signal: fetchSignal, redirect: 'manual' });
+      const location = response.headers.get('location');
+      if (response.status < 300 || response.status >= 400 || !location) break;
+      await response.body?.cancel();
+      if (hop >= MAX_REDIRECTS) throw new Error('RBXM download exceeded the redirect limit.');
+      url = new URL(location, url);
+    }
     if (!response.ok) {
       await response.body?.cancel();
       throw new Error(`RBXM download returned HTTP ${response.status}`);

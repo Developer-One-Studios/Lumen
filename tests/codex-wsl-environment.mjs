@@ -9,10 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const wrapper = path.join(repoRoot, 'scripts', 'codex-robloxstudio-mcp.sh');
+const wrapper = path.join(repoRoot, 'scripts', 'codex-lumen-mcp.sh');
 const wrapperSource = await readFile(wrapper, 'utf8');
 
-assert.match(wrapperSource, /ROBLOXSTUDIO_MCP_ENV_FILE/);
+assert.match(wrapperSource, /LUMEN_MCP_ENV_FILE/);
 assert.match(wrapperSource, /\.codex\/\.env/);
 assert.match(wrapperSource, /set -a/);
 
@@ -102,7 +102,7 @@ if (!(await isWslKernel())) {
 }
 
 const port = await reservePort();
-const canonicalEnvFile = process.env.ROBLOXSTUDIO_MCP_ENV_FILE
+const canonicalEnvFile = process.env.LUMEN_MCP_ENV_FILE
   ?? path.join(process.env.HOME ?? '', '.codex', '.env');
 const expectsCanonicalOpenCloudKey = await envFileDefines(
   canonicalEnvFile,
@@ -113,8 +113,8 @@ const environment = {
   ROBLOX_STUDIO_PORT: String(port),
   ROBLOX_STUDIO_HOST: '127.0.0.1',
   ROBLOX_STUDIO_NO_AUTH: '1',
-  ROBLOXSTUDIO_MCP_SKIP_BUILD: '1',
-  ROBLOXSTUDIO_MCP_SKIP_AUTO_INSTALL_PLUGIN: '1',
+  LUMEN_MCP_SKIP_BUILD: '1',
+  LUMEN_MCP_SKIP_AUTO_INSTALL_PLUGIN: '1',
 };
 delete environment.WSL_INTEROP;
 delete environment.WSL_DISTRO_NAME;
@@ -139,7 +139,7 @@ try {
     () => stderrBuffer,
   );
   assert.equal(health.status, 'ok');
-  assert.equal(health.service, 'robloxstudio-mcp');
+  assert.equal(health.service, 'lumen-mcp');
   assert.deepEqual(
     health.capabilities?.studioLifecycle?.processIdentity,
     {

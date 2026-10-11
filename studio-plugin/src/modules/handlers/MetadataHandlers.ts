@@ -272,7 +272,7 @@ function executeLuau(requestData: Record<string, unknown>) {
 	// of table returns, and parse-error recovery live in LuauExec so the
 	// edit/server (this handler) and the play-client (ClientBroker) take
 	// the same code path and produce identical output shapes.
-	return LuauExec.execute(code);
+	return LuauExec.execute(code, LuauExec.deadlineOf(requestData));
 }
 
 export = {

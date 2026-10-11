@@ -15,6 +15,7 @@ import HttpDiagnostics from "./HttpDiagnostics";
 import PluginSession from "./PluginSession";
 import TopologyId from "./TopologyId";
 import PeerRole from "./PeerRole";
+import BrokerTickets from "./BrokerTickets";
 import type { StudioRequestContext } from "../types";
 
 interface StudioTestServiceMultiplayer extends StudioTestService {
@@ -30,10 +31,10 @@ const StudioTestService = game.GetService("StudioTestService") as StudioTestServ
 // VM Peer identity; the server broker assigns trusted process/group topology
 // from its own playtest context before publishing that Peer to MCP.
 
-const DEFAULT_MCP_URL = "http://localhost:58741";
+const DEFAULT_MCP_URL = "http://localhost:58761";
 let mcpUrl = DEFAULT_MCP_URL;
-const BROKER_NAME = "__MCPClientBroker";
-const BROKER_OWNER_ATTRIBUTE = "__MCPBrokerOwner";
+const BROKER_NAME = "__LumenClientBroker";
+const BROKER_OWNER_ATTRIBUTE = "__LumenBrokerOwner";
 const CLIENT_IDENTITY_KIND = "identity";
 // A normal capture needs at most 15s sampling + 5s waiting for profiler data.
 // Leave room for processing, then return a diagnostic before the outer 30s wait.
@@ -60,6 +61,7 @@ interface BrokerEnvelope {
 	requestId?: string;
 	remainingMs?: number;
 	expiresAtServerTime?: number;
+	ticket?: string;
 }
 
 interface ClientIdentityHandshake {
@@ -135,7 +137,7 @@ function handleExecuteLuau(data: Record<string, unknown> | undefined) {
 	// wrapper (so `print("hi")` with no return doesn't fail the
 	// ModuleScript's "must return one value" rule) and JSON-encodes table
 	// returns instead of yielding "table: 0xaddr".
-	return LuauExec.execute(code as string);
+	return LuauExec.execute(code as string, LuauExec.deadlineOf(data));
 }
 
 function handleGetRuntimeLogs(data: Record<string, unknown> | undefined): unknown {
@@ -204,7 +206,7 @@ function sendClientIdentity(rf: RemoteFunction, attempt: number): void {
 		if (acknowledgement.success === true) return;
 	}
 	if (attempt === 0) {
-		warn(`[robloxstudio-mcp] client identity handshake failed; retrying`);
+		warn(`[lumen-mcp] client identity handshake failed; retrying`);
 	}
 	task.delay(proxyRetryDelay(attempt + 1), sendClientIdentity, rf, attempt + 1);
 }
@@ -213,7 +215,7 @@ function setupClientBroker(attempt = 0) {
 	if (PeerRole.detect() !== "client") return;
 	const rf = ReplicatedStorage.WaitForChild(BROKER_NAME, 10);
 	if (!rf || !rf.IsA("RemoteFunction")) {
-		if (attempt === 0) warn(`[robloxstudio-mcp] client: ${BROKER_NAME} not found; retrying`);
+		if (attempt === 0) warn(`[lumen-mcp] client: ${BROKER_NAME} not found; retrying`);
 		if (RunService.IsRunning()) {
 			task.delay(proxyRetryDelay(attempt + 1), setupClientBroker, attempt + 1);
 		}
@@ -222,6 +224,18 @@ function setupClientBroker(attempt = 0) {
 	rf.OnClientInvoke = (payload: BrokerEnvelope | undefined) => {
 		if (!payload || !typeIs(payload.endpoint, "string")) {
 			return { error: "Client broker request is missing its endpoint." };
+		}
+		if (BrokerTickets.isPrivileged(payload.endpoint)) {
+			const issued = BrokerTickets.redeem(payload.ticket, payload.endpoint);
+			if (issued === undefined) {
+				return {
+					success: false,
+					error: "client_broker_unauthorized",
+					message: "Refused a client request that did not come from the MCP plugin's server peer.",
+				};
+			}
+			// Run what the server peer issued, never the envelope's own data.
+			payload = { endpoint: payload.endpoint, data: issued };
 		}
 		if (payload && payload.endpoint === "/api/get-runtime-logs") {
 			return handleGetRuntimeLogs(payload.data);
@@ -388,7 +402,7 @@ function failProxyRegistration(entry: ProxyEntry, detail: string): void {
 	entry.registered = false;
 	if (!proxyRegisterFailuresByPlayer.has(entry.player)) {
 		proxyRegisterFailuresByPlayer.add(entry.player);
-		warn(`[robloxstudio-mcp] proxy register failed for ${entry.player.Name}: ${detail}`);
+		warn(`[lumen-mcp] proxy register failed for ${entry.player.Name}: ${detail}`);
 	}
 	scheduleProxyRetry(entry);
 }
@@ -439,7 +453,7 @@ function registerProxyEntry(entry: ProxyEntry): void {
 	entry.retryAttempt = 0;
 	if (proxyRegisterFailuresByPlayer.has(entry.player)) {
 		proxyRegisterFailuresByPlayer.delete(entry.player);
-		print(`[robloxstudio-mcp] proxy registered for ${entry.player.Name} as ${assignedRole} via ${mcpUrl}`);
+		print(`[lumen-mcp] proxy registered for ${entry.player.Name} as ${assignedRole} via ${mcpUrl}`);
 	}
 }
 
@@ -669,8 +683,14 @@ function dispatchClientRequest(
 		);
 	}
 
-	const envelope = { endpoint, data };
+	let ticket: string | undefined;
+	if (BrokerTickets.isPrivileged(endpoint)) {
+		ticket = BrokerTickets.issue(endpoint, data);
+		if (ticket === undefined) return { success: false, error: "Could not issue a client broker ticket." };
+	}
+	const envelope: BrokerEnvelope = ticket !== undefined ? { endpoint, ticket } : { endpoint, data };
 	const [invokeOk, invokeResult] = pcall(() => entry.remote.InvokeClient(entry.player, envelope));
+	if (ticket !== undefined) BrokerTickets.revoke(ticket);
 	if (!invokeOk) {
 		return { success: false, error: `InvokeClient failed: ${tostring(invokeResult)}` };
 	}
@@ -684,7 +704,7 @@ function setupServerBroker() {
 	let rf: RemoteFunction;
 	if (existing !== undefined) {
 		if (!existing.IsA("RemoteFunction")) {
-			warn(`[robloxstudio-mcp] server: ${BROKER_NAME} exists but is not a RemoteFunction`);
+			warn(`[lumen-mcp] server: ${BROKER_NAME} exists but is not a RemoteFunction`);
 			return;
 		}
 		rf = existing;

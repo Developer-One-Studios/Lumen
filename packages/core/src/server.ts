@@ -31,7 +31,7 @@ export class RobloxStudioMCPServer {
   }
 
   async run() {
-    const basePort = process.env.ROBLOX_STUDIO_PORT ? parseInt(process.env.ROBLOX_STUDIO_PORT) : 58741;
+    const basePort = process.env.ROBLOX_STUDIO_PORT ? parseInt(process.env.ROBLOX_STUDIO_PORT) : 58761;
     // Bind loopback-only by default. Exposing the bridge on other interfaces
     // (e.g. 0.0.0.0) is an explicit opt-in via ROBLOX_STUDIO_HOST.
     const host = process.env.ROBLOX_STUDIO_HOST?.trim() || '127.0.0.1';
@@ -94,11 +94,14 @@ export class RobloxStudioMCPServer {
       // Fall back to proxy mode and forward all bridge calls through it.
       bridgeMode = 'proxy';
       primaryApp = undefined;
-      const proxyBridge = new ProxyBridgeService(`http://localhost:${basePort}`, auth.token);
+      // The exact address the primary binds: "localhost" may resolve to ::1, where another process could listen and relay the challenge.
+      const primaryHost = host === '0.0.0.0' || host === 'localhost' ? '127.0.0.1' : host === '::' ? '::1' : host;
+      const primaryUrl = `http://${primaryHost.includes(':') ? `[${primaryHost}]` : primaryHost}:${basePort}`;
+      const proxyBridge = new ProxyBridgeService(primaryUrl, auth.token);
       await proxyBridge.waitForInitialRefresh();
       this.bridge = proxyBridge;
       this.tools = new RobloxStudioTools(this.bridge);
-      console.error(`Port ${basePort} in use - entering proxy mode (forwarding to localhost:${basePort})`);
+      console.error(`Port ${basePort} in use - entering proxy mode (forwarding to ${primaryUrl})`);
 
       // Periodically try to promote to primary if the port frees up.
       // Single-attempt bind for the same reason as the initial bind above —

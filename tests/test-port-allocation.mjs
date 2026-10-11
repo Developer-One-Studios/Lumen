@@ -29,7 +29,7 @@ async function canListen(port) {
 
 assert.equal(configuredTestPort({}), undefined);
 assert.equal(configuredTestPort({ ROBLOX_STUDIO_PORT: '43123' }), 43123);
-assert.equal(testBasePort({}), 58741);
+assert.equal(testBasePort({}), 58761);
 assert.equal(testBasePort({ ROBLOX_STUDIO_PORT: '43123' }), 43123);
 assert.throws(
   () => configuredTestPort({ ROBLOX_STUDIO_PORT: 'not-a-port' }),

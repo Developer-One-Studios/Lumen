@@ -5,8 +5,9 @@ import {
   ResourceTemplate,
 } from '@modelcontextprotocol/server';
 import { DOC_CATEGORIES, fetchRobloxDoc, isDocCategory, DocNotFoundError } from './roblox-docs.js';
+import { FORK_FEATURES } from './tools/fork/index.js';
 
-export const TOOL_GUIDE_URI = 'robloxstudio://tool-guides';
+export const TOOL_GUIDE_URI = 'lumen://tool-guides';
 
 export const TOOL_GUIDE_MARKDOWN = `# Roblox Studio MCP tool guide
 
@@ -44,6 +45,7 @@ Tool descriptions explain selection. Input schemas explain arguments. This guide
 Start solo_playtest or multiplayer_playtest before targeting a live server or client. Stop the playtest when the scenario is complete.
 
 execute_luau runs through the Studio plugin. eval_server_runtime and eval_client_runtime run inside a live game VM and share that VM's require cache with game scripts. Use the eval tools when module state or the runtime Script or LocalScript environment matters.
+All three cancel code still yielding after timeout_s (25 s by default) and name the WaitForChild that never resolved. Lines before the yield have already run. Prefer FindFirstChild, or WaitForChild with a timeout, for anything that may not exist.
 
 Read output with get_runtime_logs. Reuse nextCursor as cursor for one Instance, or nextCursorByInstance as cursor_by_instance for a Multiplayer Group, instead of requesting the full process streams again.
 
@@ -96,10 +98,42 @@ manage_monetization lists, reads, creates, and updates developer products and ga
 
 manage_instance can launch, inspect, and close Studio or list published place revisions. A process-identity launch returns a suspended launch that must be authorized and completed explicitly. Keep its launch_id until the connection has an instance_id.
 
+## Rojo projects
+
+- With a sourcemap.json in or above the server's working directory, or after resolve_source project_root, Studio locations in logs, errors, and breakpoint hits are followed by [file:line].
+- set_script_source, edit_script_lines, insert_script_lines, delete_script_lines, multi_edit, and find_and_replace_in_scripts refuse scripts Rojo syncs, because the next sync overwrites Studio edits. Edit the file on disk instead.
+- Players.<name>.PlayerScripts, PlayerGui and Backpack map back to their Starter containers. Character scripts in Workspace do not, because a player cannot be told apart from an NPC by path.
+- A missing or stale map (older than the project file or ROBLOX_SOURCEMAP_MAX_AGE_S, 300 s by default) is rebuilt in memory with rojo sourcemap and never written into the project. verify_sync regenerate=true forces a rebuild after adding or moving files.
+
+## Finding lag
+
+- perf_stats samples frame time, CPU and GPU render time, draw calls, triangles, heartbeat, physics step, network rates, and ping on each peer. remotes=true also counts calls and bytes per RemoteEvent; it connects a listener to every remote, so a remote with no game listener yet would deliver its queued events to it, run it after game scripts have started.
+- Studio frame times on a fast desktop understate player lag. Compare counts (draw calls, triangles, live particles, unanchored parts) and relative changes instead of absolute FPS.
+- lag_audit ranks particle emitters by estimated screen fill, shadow-casting lights, heavy top-level models, precise collision, unique meshes, and streaming settings, and lists heuristics that crossed a threshold. Scan a running client to see what it actually streamed in.
+- profile_toggle measures a category by sampling, switching it off, sampling again, and restoring it in the same call. It only runs on playtest peers. category=instance unparents the instance for the measurement, which can disturb scripts that watch it.
+- High ping in a live game is often a slow server frame; check heartbeatHz and HeartbeatTimeMs on the server before blaming the network.
+
+## Leaks
+
+- leak_check runs action in the game VM for each iteration, then measures memory tags, instance counts by class, unparented instances (needs Scene Analysis in Studio Beta Features), and optional watch expressions such as #require(game.ReplicatedStorage.Cache).entries.
+- The first iteration warms caches and is excluded. Only metrics that grow steadily are reported.
+
+## GUI and characters
+
+- inspect_gui rows are [path, class, x, y, w, h, z, displayOrder, text, clickable, visible] in viewport pixels, the same space as capture_screenshot and simulate_mouse_input.
+- navigate_character walks with PathfindingService on the client and falls back to a straight MoveTo when no path exists. An instance target counts as reached within 4 studs of its box.
+- A character that makes no headway for a second gets one jump and then one fresh path. If it is still stuck the result has reached false, stopped "stalled" and blocked with the waypoint, the part in front of it (with CanCollide and collision group, since pathfinding can route through parts the character still collides with) and the Humanoid state. Otherwise stopped says "timeout" or "died".
+
+## Security testing
+
+- fuzz_remotes fires malformed values, oversized strings and tables, NaN vectors, random buffers, and spam from a client, the way an exploiter would, then collects server errors per remote. Blink and Zap remotes receive raw buffers, which tests their decoders.
+- It only runs in a playtest, but handlers can still change server state during it.
+
 ## Roblox reference material
 
 Use get_roblox_docs for official engine and Luau reference pages. Use get_roblox_skills to list or read Roblox-authored Studio Assistant skills when their longer guidance is useful.
-`;
+`
+  + FORK_FEATURES.flatMap((feature) => (feature.guide ? [`\n${feature.guide.trim()}\n`] : [])).join('');
 
 /** Official Roblox reference templates shared by the HTTP and stdio servers. */
 export function registerResourceHandlers(server: McpServer): void {

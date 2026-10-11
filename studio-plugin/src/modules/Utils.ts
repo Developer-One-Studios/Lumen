@@ -485,27 +485,6 @@ function evaluateFormula(
 	}
 }
 
-function compareVersions(v1: string, v2: string): number {
-	function parseVersion(v: string): number[] {
-		const parts: number[] = [];
-		for (const [num] of string.gmatch(v, "%d+")) {
-			parts.push(tonumber(num) ?? 0);
-		}
-		return parts;
-	}
-
-	const p1 = parseVersion(v1);
-	const p2 = parseVersion(v2);
-	const maxLen = math.max(p1.size(), p2.size());
-	for (let i = 0; i < maxLen; i++) {
-		const n1 = p1[i] ?? 0;
-		const n2 = p2[i] ?? 0;
-		if (n1 < n2) return -1;
-		if (n1 > n2) return 1;
-	}
-	return 0;
-}
-
 export = {
 	safeCall,
 	getInstancePath,
@@ -516,5 +495,4 @@ export = {
 	applyScriptSource,
 	convertPropertyValue,
 	evaluateFormula,
-	compareVersions,
 };

@@ -329,6 +329,35 @@ describe('capture_screenshot host window fallback', () => {
     expect(markerState.shown).toBe(false);
   });
 
+  test('refuses a multiplayer client in its own process instead of reading its capture id in another one', async () => {
+    const bridge = new BridgeService();
+    bridge.createMultiplayerGroup('group-1', 'instance:edit');
+    for (const [peerId, instanceId, role] of [
+      ['edit-session', 'instance:edit', 'edit'],
+      ['server-session', 'instance:edit', 'server'],
+      ['client-session', 'instance:client', 'client-1'],
+    ]) {
+      const result = bridge.registerPeer({
+        peerId, transportPeerId: peerId, instanceId, role, multiplayerGroupId: 'group-1',
+        placeId: 0, placeName: 'TestPlace', dataModelName: 'TestPlace', isRunning: role !== 'edit',
+      });
+      if (!result.ok) throw new Error(`registerPeer failed: ${result.error.code}`);
+    }
+    const request = jest.spyOn(StudioHttpClient.prototype, 'request').mockImplementation((async (endpoint: string) => {
+      if (endpoint === '/api/capture-studio') return { unavailable: 'StudioCaptureService cannot capture this DataModel right now' };
+      throw new Error(`unexpected endpoint ${endpoint}`);
+    }) as never);
+    const tools = new RobloxStudioTools(bridge);
+    (tools as unknown as { hostWindowCapture: HostWindowCaptureFn }).hostWindowCapture = async () => ({ ok: false, error: 'no host window' });
+
+    const result = await tools.captureScreenshot('instance:edit', 'png', undefined, { clients: ['client-1'] });
+    const text = JSON.parse((result.content[0] as { text: string }).text);
+    expect(text.error).toBe('No screenshot was captured.');
+    expect(text.images[0].error).toContain('client-1 runs in its own Studio process');
+    expect(result.content.some((item) => 'data' in item)).toBe(false);
+    expect(request.mock.calls.some(([endpoint]) => endpoint === '/api/capture-begin' || endpoint === '/api/capture-read')).toBe(false);
+  });
+
   test('preserves a capture-begin error and fast-path reason when host capture is unsupported', async () => {
     Object.defineProperty(process, 'platform', { value: 'linux' });
     const hostCapture = jest.fn(async (): Promise<HostCaptureResult> => ({ ok: false, error: 'must not run' }));

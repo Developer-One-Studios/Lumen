@@ -8,8 +8,9 @@ import type {
   StudioPeer,
   TopologySnapshot,
 } from './bridge-service.js';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { HTTP_BODY_LIMIT_BYTES } from './http-body-limits.js';
+import { proxyChallengeProof, tokensMatch } from './auth.js';
 
 const PROXY_RESPONSE_GRACE_MS = 5_000;
 
@@ -78,6 +79,9 @@ export class ProxyBridgeService extends BridgeService {
   private static TOPOLOGY_TIMEOUT_MS = 2_000;
   private topologyGeneration = 0;
   private appliedTopologyGeneration = 0;
+  private primaryVerifiedAt = 0;
+  // Twice the poll interval, so one slow poll does not drop the token mid-call but a replaced listener loses it fast.
+  private static PRIMARY_TRUST_MS = 2_000;
 
   constructor(primaryBaseUrl: string, authToken?: string) {
     super();
@@ -97,10 +101,28 @@ export class ProxyBridgeService extends BridgeService {
     return this.initialRefresh;
   }
 
+  // Callers verify first when this is true; checking synchronously keeps a fresh request on the same tick.
+  private primaryTrustLapsed(): boolean {
+    return Boolean(this.authToken) && Date.now() - this.primaryVerifiedAt >= ProxyBridgeService.PRIMARY_TRUST_MS;
+  }
+
   private authHeaders(extra?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = { ...extra };
-    if (this.authToken) headers['X-MCP-Auth'] = this.authToken;
+    if (this.authToken && !this.primaryTrustLapsed()) headers['X-MCP-Auth'] = this.authToken;
     return headers;
+  }
+
+  // Whatever holds the port gets every proxied call and the token, so it must prove it already has the token.
+  private async verifyPrimary(signal: AbortSignal): Promise<void> {
+    if (!this.authToken) return;
+    const nonce = randomBytes(32).toString('hex');
+    const res = await fetch(`${this.primaryBaseUrl}/proxy-challenge?nonce=${nonce}`, { signal });
+    const body = res.ok ? (await res.json()) as { proof?: unknown } : undefined;
+    if (typeof body?.proof !== 'string' || !tokensMatch(body.proof, proxyChallengeProof(this.authToken, nonce))) {
+      this.primaryVerifiedAt = 0;
+      throw new Error('The listener on the primary port could not prove it holds the auth token; refusing to proxy to it.');
+    }
+    this.primaryVerifiedAt = Date.now();
   }
 
   override refreshTopologyForRouting(signal?: AbortSignal): Promise<void> {
@@ -119,6 +141,7 @@ export class ProxyBridgeService extends BridgeService {
     );
     try {
       controller.signal.throwIfAborted();
+      await this.verifyPrimary(controller.signal);
       const res = await fetch(`${this.primaryBaseUrl}/topology`, {
         headers: this.authHeaders(),
         signal: controller.signal,
@@ -180,6 +203,7 @@ export class ProxyBridgeService extends BridgeService {
     groupId: string,
     controllerInstanceId: string,
   ): Promise<MultiplayerGroup> {
+    if (this.primaryTrustLapsed()) await this.verifyPrimary(AbortSignal.timeout(ProxyBridgeService.TOPOLOGY_TIMEOUT_MS));
     const response = await fetch(`${this.primaryBaseUrl}/create-multiplayer-group`, {
       method: 'POST',
       headers: this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -220,6 +244,7 @@ export class ProxyBridgeService extends BridgeService {
   override async removeMultiplayerGroupEverywhere(
     groupId: string,
   ): Promise<MultiplayerGroup | undefined> {
+    if (this.primaryTrustLapsed()) await this.verifyPrimary(AbortSignal.timeout(ProxyBridgeService.TOPOLOGY_TIMEOUT_MS));
     const response = await fetch(`${this.primaryBaseUrl}/remove-multiplayer-group`, {
       method: 'POST',
       headers: this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -269,6 +294,7 @@ export class ProxyBridgeService extends BridgeService {
 
 
   override async unregisterInstanceIdEverywhere(instanceId: string): Promise<PublicStudioPeer[]> {
+    if (this.primaryTrustLapsed()) await this.verifyPrimary(AbortSignal.timeout(ProxyBridgeService.TOPOLOGY_TIMEOUT_MS));
     const response = await fetch(`${this.primaryBaseUrl}/unregister-instance-id`, {
       method: 'POST',
       headers: this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -309,6 +335,7 @@ export class ProxyBridgeService extends BridgeService {
   }
 
   override async getRequestStatusEverywhere(requestId: string): Promise<RequestStatus | undefined> {
+    if (this.primaryTrustLapsed()) await this.verifyPrimary(AbortSignal.timeout(ProxyBridgeService.TOPOLOGY_TIMEOUT_MS));
     const response = await fetch(`${this.primaryBaseUrl}/request-status?requestId=${encodeURIComponent(requestId)}`, {
       headers: this.authHeaders(),
       signal: AbortSignal.timeout(5_000),
@@ -367,6 +394,7 @@ export class ProxyBridgeService extends BridgeService {
     let primaryError = false;
 
     try {
+      if (this.primaryTrustLapsed()) await this.verifyPrimary(AbortSignal.timeout(ProxyBridgeService.TOPOLOGY_TIMEOUT_MS));
       const response = await fetch(`${this.primaryBaseUrl}/proxy`, {
         method: 'POST',
         headers: this.authHeaders({ 'Content-Type': 'application/json' }),

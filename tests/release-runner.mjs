@@ -124,7 +124,7 @@ for (const failure of [
       ROBLOX_STUDIO_NO_AUTH: '0',
       MCP_PLUGINS_DIR: '/fixture/plugins',
       RSMCP_STUDIO_WORKING_DIRECTORY: '/fixture/studio',
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: '/fixture/registry',
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: '/fixture/registry',
     },
     stop() { throw new Error('borrower must not close the owning MCP client'); },
   };
@@ -180,25 +180,25 @@ for (const failure of [
   const plugin = (variant, value = version) => `local CURRENT_VERSION = "${value}";\nlocal PLUGIN_VARIANT = "${variant}";`;
   try {
     put('package.json', JSON.stringify({ version }));
-    for (const workspace of ['robloxstudio-mcp', 'robloxstudio-mcp-inspector']) {
+    for (const workspace of ['lumen-mcp', 'lumen-mcp-inspector']) {
       put(`packages/${workspace}/package.json`, JSON.stringify({ version }));
       put(`packages/${workspace}/dist/index.js`, 'export const compiled = true;');
     }
-    put('studio-plugin/MCPPlugin.rbxmx', plugin('main'));
-    put('studio-plugin/MCPInspectorPlugin.rbxmx', plugin('inspector'));
+    put('studio-plugin/LumenPlugin.rbxmx', plugin('main'));
+    put('studio-plugin/LumenInspectorPlugin.rbxmx', plugin('inspector'));
     validatePreparedArtifacts(root);
-    put('studio-plugin/MCPInspectorPlugin.rbxmx', plugin('inspector', '98.0.0'));
+    put('studio-plugin/LumenInspectorPlugin.rbxmx', plugin('inspector', '98.0.0'));
     assert.throws(() => validatePreparedArtifacts(root), /CURRENT_VERSION/);
-    put('studio-plugin/MCPInspectorPlugin.rbxmx', plugin('main'));
+    put('studio-plugin/LumenInspectorPlugin.rbxmx', plugin('main'));
     assert.throws(() => validatePreparedArtifacts(root), /PLUGIN_VARIANT/);
-    put('studio-plugin/MCPInspectorPlugin.rbxmx', plugin('inspector'));
-    put('packages/robloxstudio-mcp/package.json', JSON.stringify({ version: '98.0.0' }));
+    put('studio-plugin/LumenInspectorPlugin.rbxmx', plugin('inspector'));
+    put('packages/lumen-mcp/package.json', JSON.stringify({ version: '98.0.0' }));
     assert.throws(() => validatePreparedArtifacts(root), /version .* does not match/);
-    put('packages/robloxstudio-mcp/package.json', JSON.stringify({ version }));
-    rmSync(join(root, 'packages/robloxstudio-mcp-inspector/dist/index.js'));
+    put('packages/lumen-mcp/package.json', JSON.stringify({ version }));
+    rmSync(join(root, 'packages/lumen-mcp-inspector/dist/index.js'));
     assert.throws(() => validatePreparedArtifacts(root), /server output is missing/);
-    put('packages/robloxstudio-mcp-inspector/dist/index.js', 'export const compiled = true;');
-    rmSync(join(root, 'studio-plugin/MCPPlugin.rbxmx'));
+    put('packages/lumen-mcp-inspector/dist/index.js', 'export const compiled = true;');
+    rmSync(join(root, 'studio-plugin/LumenPlugin.rbxmx'));
     assert.throws(() => validatePreparedArtifacts(root), /ENOENT/);
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -27,29 +27,30 @@ const modulesDir = join(outDir, 'modules');
 const includeDir = join(pluginDir, 'include');
 const nodeModulesRbxtsDir = join(pluginDir, 'node_modules', '@rbxts');
 
-// Three icon variants per build, swapped by the plugin at runtime to reflect
-// connection state. Until separate white/yellow/green assets are uploaded, all
-// three slots point at the same legacy ID so behavior is unchanged visually.
+// Image ids of the Lumen icons in studio-plugin/assets/icons, uploaded to the team group. The plugin swaps
+// the three toolbar icons to show the connection state, and brandMark is the panel logo.
 const VARIANTS = {
   main: {
-    scriptName: 'MCPPlugin',
-    outputName: 'MCPPlugin.rbxmx',
-    toolbarName: 'MCP Integration',
-    buttonTitle: 'MCP Server',
-    buttonTooltip: 'Connect to MCP Server for AI Integration',
-    buttonIconDisconnected: '75876056391496',  // red
-    buttonIconConnecting: '71302583919560',    // yellow
-    buttonIconConnected: '130958234173611',    // green
+    scriptName: 'LumenPlugin',
+    outputName: 'LumenPlugin.rbxmx',
+    toolbarName: 'Lumen',
+    buttonTitle: 'Lumen',
+    buttonTooltip: 'Connect Studio to your AI agent through Lumen',
+    buttonIconDisconnected: '118251035244716',
+    buttonIconConnecting: '98870164599462',
+    buttonIconConnected: '139349973390110',
+    brandMark: '102562444065796',
   },
   inspector: {
-    scriptName: 'MCPInspectorPlugin',
-    outputName: 'MCPInspectorPlugin.rbxmx',
-    toolbarName: 'MCP Inspector',
-    buttonTitle: 'MCP Inspector',
-    buttonTooltip: 'Connect to MCP Inspector (read-only) for AI Integration',
-    buttonIconDisconnected: '125921838360800', // TODO: replace with white-variant asset ID
-    buttonIconConnecting: '125921838360800',   // TODO: replace with yellow-variant asset ID
-    buttonIconConnected: '125921838360800',    // TODO: replace with green-variant asset ID
+    scriptName: 'LumenInspectorPlugin',
+    outputName: 'LumenInspectorPlugin.rbxmx',
+    toolbarName: 'Lumen Inspector',
+    buttonTitle: 'Lumen Inspector',
+    buttonTooltip: 'Connect Studio to your AI agent through Lumen, read-only',
+    buttonIconDisconnected: '77673267526967',
+    buttonIconConnecting: '133265161672632',
+    buttonIconConnected: '70816796398804',
+    brandMark: '102562444065796',
   },
 };
 
@@ -77,7 +78,8 @@ function injectVersion(source) {
     .replace(/__BUTTON_TOOLTIP__/g, variant.buttonTooltip)
     .replace(/__BUTTON_ICON_DISCONNECTED__/g, variant.buttonIconDisconnected)
     .replace(/__BUTTON_ICON_CONNECTING__/g, variant.buttonIconConnecting)
-    .replace(/__BUTTON_ICON_CONNECTED__/g, variant.buttonIconConnected);
+    .replace(/__BUTTON_ICON_CONNECTED__/g, variant.buttonIconConnected)
+    .replace(/__BRAND_MARK__/g, variant.brandMark);
 }
 
 const serverInitPath = join(serverDir, 'init.server.luau');
@@ -268,7 +270,7 @@ function resolvePluginsDir() {
   }
 }
 
-const PLUGIN_INSTALL_LOCK_NAME = '.robloxstudio-mcp-plugin-install.lock';
+const PLUGIN_INSTALL_LOCK_NAME = '.lumen-mcp-plugin-install.lock';
 
 function acquirePluginInstallLock(pluginsDir) {
   const lockPath = join(pluginsDir, PLUGIN_INSTALL_LOCK_NAME);

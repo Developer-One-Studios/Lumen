@@ -800,9 +800,15 @@ export class OpenCloudClient {
   ): Promise<AssetOperationResponse> {
     const operationId = operationPath.replace('operations/', '');
     for (let i = 0; i < maxAttempts; i++) {
-      const result = await this.request<AssetOperationResponse>(
-        `/assets/v1/operations/${operationId}`
-      );
+      let result: AssetOperationResponse;
+      try {
+        result = await this.request<AssetOperationResponse>(
+          `/assets/v1/operations/${operationId}`
+        );
+      } catch (error) {
+        // The upload was accepted, so a failed status poll must not read as a failed upload that is safe to retry.
+        throw new Error(`${error instanceof Error ? error.message : String(error)} Operation ID: ${operationId}`);
+      }
       if (result.done) return result;
       if (result.error) {
         throw new Error(`Asset upload failed: ${result.error.message}`);

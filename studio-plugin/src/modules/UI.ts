@@ -1,4 +1,4 @@
-import { TweenService } from "@rbxts/services";
+import { RunService, TweenService } from "@rbxts/services";
 import State from "./State";
 import ServerUrlSettings from "./ServerUrlSettings";
 
@@ -21,12 +21,13 @@ interface UIElements {
 	step3Dot: Frame;
 	step3Label: TextLabel;
 	troubleshootLabel: TextLabel;
-	updateBanner: Frame;
-	updateBannerText: TextLabel;
+	placeValue: TextLabel;
+	peerValue: TextLabel;
+	requestsValue: TextLabel;
+	lastValue: TextLabel;
 }
 
 let elements: UIElements = undefined!;
-let pulseAnimation: Tween | undefined;
 let buttonHover = false;
 
 interface ToolbarIcons {
@@ -37,7 +38,6 @@ interface ToolbarIcons {
 let toolbarButton: PluginToolbarButton | undefined;
 let toolbarIcons: ToolbarIcons | undefined;
 let lastToolbarIcon: string | undefined;
-let activeBannerKind: string | undefined;
 
 function setToolbarButton(btn: PluginToolbarButton, icons: ToolbarIcons) {
 	toolbarButton = btn;
@@ -69,77 +69,116 @@ function tweenProp(instance: Instance, props: Record<string, unknown>) {
 	TweenService.Create(instance, TWEEN_QUICK, props as unknown as { [key: string]: unknown }).Play();
 }
 
-function showBanner(kind: string, text: string) {
-	activeBannerKind = kind;
-	elements.updateBannerText.Text = text;
-	elements.updateBanner.Visible = true;
-	elements.contentFrame.Position = new UDim2(0, 8, 0, 70);
-	elements.contentFrame.Size = new UDim2(1, -16, 1, -78);
-}
-
-function hideBanner(kind?: string) {
-	if (kind !== undefined && activeBannerKind !== kind) return;
-	activeBannerKind = undefined;
-	elements.updateBanner.Visible = false;
-	elements.updateBannerText.Text = "";
-	elements.contentFrame.Position = new UDim2(0, 8, 0, 44);
-	elements.contentFrame.Size = new UDim2(1, -16, 1, -52);
-}
-
 const C = {
-	bg: Color3.fromRGB(14, 14, 14),
-	card: Color3.fromRGB(22, 22, 22),
-	surface: Color3.fromRGB(30, 30, 30),
-	border: Color3.fromRGB(38, 38, 38),
-	subtle: Color3.fromRGB(48, 48, 48),
-	muted: Color3.fromRGB(100, 100, 100),
-	dim: Color3.fromRGB(140, 140, 140),
-	label: Color3.fromRGB(180, 180, 180),
-	white: Color3.fromRGB(240, 240, 240),
+	bg: Color3.fromRGB(16, 16, 18),
+	card: Color3.fromRGB(24, 24, 27),
+	surface: Color3.fromRGB(34, 34, 38),
+	border: Color3.fromRGB(44, 44, 48),
+	subtle: Color3.fromRGB(56, 56, 60),
+	muted: Color3.fromRGB(112, 112, 120),
+	dim: Color3.fromRGB(150, 150, 158),
+	label: Color3.fromRGB(196, 196, 204),
+	white: Color3.fromRGB(240, 240, 244),
+	accent: Color3.fromRGB(255, 194, 51),
 	green: Color3.fromRGB(52, 211, 153),
 	yellow: Color3.fromRGB(251, 191, 36),
 	red: Color3.fromRGB(248, 113, 113),
-	gray: Color3.fromRGB(120, 120, 120),
+	gray: Color3.fromRGB(96, 96, 104),
 };
 
-const CORNER = new UDim(0, 4);
+const CORNER = new UDim(0, 6);
+const BRAND_MARK = "rbxassetid://__BRAND_MARK__";
+
+function corner(parent: Instance, radius: UDim = CORNER) {
+	const c = new Instance("UICorner");
+	c.CornerRadius = radius;
+	c.Parent = parent;
+}
+
+function text(parent: Instance, props: Partial<WritableInstanceProperties<TextLabel>>): TextLabel {
+	const label = new Instance("TextLabel");
+	label.BackgroundTransparency = 1;
+	label.Font = Enum.Font.GothamMedium;
+	label.TextColor3 = C.label;
+	label.TextSize = 11;
+	label.TextXAlignment = Enum.TextXAlignment.Left;
+	for (const [key, value] of pairs(props)) {
+		(label as unknown as Record<string, unknown>)[key as string] = value;
+	}
+	label.Parent = parent;
+	return label;
+}
 
 function setButtonConnect(btn: TextButton, stroke: UIStroke) {
 	btn.Text = "Connect";
-	btn.TextColor3 = C.white;
-	btn.BackgroundColor3 = C.surface;
-	stroke.Color = C.subtle;
+	btn.TextColor3 = C.bg;
+	btn.BackgroundColor3 = C.accent;
+	stroke.Color = C.accent;
 }
 
 function setButtonDisconnect(btn: TextButton, stroke: UIStroke) {
 	btn.Text = "Disconnect";
 	btn.TextColor3 = C.red;
 	btn.BackgroundColor3 = C.bg;
-	stroke.Color = Color3.fromRGB(80, 30, 30);
+	stroke.Color = Color3.fromRGB(90, 36, 36);
 }
 
 function stopPulseAnimation() {
-	elements.statusPulse.Size = new UDim2(0, 10, 0, 10);
-	elements.statusPulse.Position = new UDim2(0, 0, 0, 0);
-	elements.statusPulse.BackgroundTransparency = 0.7;
+	elements.statusPulse.BackgroundTransparency = 1;
 }
 
 function startPulseAnimation() {
-	elements.statusPulse.Size = new UDim2(0, 10, 0, 10);
-	elements.statusPulse.Position = new UDim2(0, 0, 0, 0);
-	elements.statusPulse.BackgroundTransparency = 0.7;
+	elements.statusPulse.BackgroundTransparency = 0.6;
+}
+
+function card(parent: Instance, title: string, order: number): Frame {
+	const frame = new Instance("Frame");
+	frame.Size = new UDim2(1, 0, 0, 0);
+	frame.AutomaticSize = Enum.AutomaticSize.Y;
+	frame.BackgroundColor3 = C.card;
+	frame.BorderSizePixel = 0;
+	frame.LayoutOrder = order;
+	frame.Parent = parent;
+	corner(frame);
+
+	const stroke = new Instance("UIStroke");
+	stroke.Color = C.border;
+	stroke.Thickness = 1;
+	stroke.Parent = frame;
+
+	const padding = new Instance("UIPadding");
+	padding.PaddingLeft = new UDim(0, 12);
+	padding.PaddingRight = new UDim(0, 12);
+	padding.PaddingTop = new UDim(0, 10);
+	padding.PaddingBottom = new UDim(0, 12);
+	padding.Parent = frame;
+
+	const layout = new Instance("UIListLayout");
+	layout.Padding = new UDim(0, 7);
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.Parent = frame;
+
+	text(frame, {
+		Size: new UDim2(1, 0, 0, 12),
+		Text: title,
+		TextColor3: C.muted,
+		TextSize: 10,
+		Font: Enum.Font.GothamBold,
+		LayoutOrder: 0,
+	});
+	return frame;
 }
 
 function init(pluginRef: Plugin) {
 	const CURRENT_VERSION = State.CURRENT_VERSION;
 
 	const screenGui = pluginRef.CreateDockWidgetPluginGuiAsync(
-		"MCPServerInterface",
+		"LumenInterface",
 		// 3rd arg (initialEnabledShouldOverrideRestore=true) forces the dock closed
 		// at every Studio launch. User can still open via the toolbar button.
-		new DockWidgetPluginGuiInfo(Enum.InitialDockState.Float, false, true, 300, 260, 260, 200),
+		new DockWidgetPluginGuiInfo(Enum.InitialDockState.Float, false, true, 310, 380, 270, 240),
 	);
-	(screenGui as unknown as { Title: string }).Title = `MCP Server v${CURRENT_VERSION}`;
+	(screenGui as unknown as { Title: string }).Title = `Lumen v${CURRENT_VERSION}`;
 
 	const mainFrame = new Instance("Frame");
 	mainFrame.Size = new UDim2(1, 0, 1, 0);
@@ -148,161 +187,130 @@ function init(pluginRef: Plugin) {
 	mainFrame.Parent = screenGui;
 
 	const header = new Instance("Frame");
-	header.Size = new UDim2(1, 0, 0, 40);
-	header.BackgroundColor3 = C.bg;
-	header.BorderSizePixel = 0;
+	header.Size = new UDim2(1, 0, 0, 54);
+	header.BackgroundTransparency = 1;
 	header.Parent = mainFrame;
 
+	const logo = new Instance("ImageLabel");
+	logo.Size = new UDim2(0, 30, 0, 30);
+	logo.Position = new UDim2(0, 12, 0, 12);
+	logo.BackgroundTransparency = 1;
+	logo.Image = BRAND_MARK;
+	logo.ScaleType = Enum.ScaleType.Fit;
+	logo.Parent = header;
+
+	text(header, {
+		Size: new UDim2(1, -150, 0, 18),
+		Position: new UDim2(0, 50, 0, 10),
+		RichText: true,
+		Text: `<font color="#F0F0F4">Lumen</font> <font color="#707078" size="11">v${CURRENT_VERSION}</font>`,
+		TextSize: 16,
+		Font: Enum.Font.GothamBold,
+	});
+	text(header, {
+		Size: new UDim2(1, -150, 0, 14),
+		Position: new UDim2(0, 50, 0, 29),
+		Text: "Roblox Studio for AI agents",
+		TextColor3: C.muted,
+		TextSize: 10,
+	});
+
+	// Sized to its content with even padding, so every label sits centered whatever its length.
+	const pill = new Instance("Frame");
+	pill.AutomaticSize = Enum.AutomaticSize.X;
+	pill.Size = new UDim2(0, 0, 0, 22);
+	pill.AnchorPoint = new Vector2(1, 0);
+	pill.Position = new UDim2(1, -12, 0, 16);
+	pill.BackgroundColor3 = C.surface;
+	pill.BorderSizePixel = 0;
+	pill.Parent = header;
+	corner(pill, new UDim(1, 0));
+
+	const pillPadding = new Instance("UIPadding");
+	pillPadding.PaddingLeft = new UDim(0, 10);
+	pillPadding.PaddingRight = new UDim(0, 10);
+	pillPadding.Parent = pill;
+
+	const pillLayout = new Instance("UIListLayout");
+	pillLayout.FillDirection = Enum.FillDirection.Horizontal;
+	pillLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
+	pillLayout.Padding = new UDim(0, 6);
+	pillLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	pillLayout.Parent = pill;
+
+	const statusIndicator = new Instance("Frame");
+	statusIndicator.Size = new UDim2(0, 8, 0, 8);
+	statusIndicator.BackgroundColor3 = C.red;
+	statusIndicator.BorderSizePixel = 0;
+	statusIndicator.LayoutOrder = 1;
+	statusIndicator.Parent = pill;
+	corner(statusIndicator, new UDim(1, 0));
+
+	const statusPulse = new Instance("Frame");
+	statusPulse.Size = new UDim2(0, 14, 0, 14);
+	statusPulse.Position = new UDim2(0.5, -7, 0.5, -7);
+	statusPulse.BackgroundColor3 = C.red;
+	statusPulse.BackgroundTransparency = 1;
+	statusPulse.BorderSizePixel = 0;
+	statusPulse.ZIndex = 0;
+	statusPulse.Parent = statusIndicator;
+	corner(statusPulse, new UDim(1, 0));
+
+	const statusText = text(pill, {
+		AutomaticSize: Enum.AutomaticSize.X,
+		Size: new UDim2(0, 0, 1, 0),
+		Text: "Offline",
+		TextColor3: C.label,
+		TextSize: 11,
+		Font: Enum.Font.GothamBold,
+		LayoutOrder: 2,
+	});
+
 	const headerLine = new Instance("Frame");
-	headerLine.Size = new UDim2(1, -16, 0, 1);
-	headerLine.Position = new UDim2(0, 8, 1, -1);
+	headerLine.Size = new UDim2(1, -24, 0, 1);
+	headerLine.Position = new UDim2(0, 12, 1, -1);
 	headerLine.BackgroundColor3 = C.border;
 	headerLine.BorderSizePixel = 0;
 	headerLine.Parent = header;
 
-	const titleLabel = new Instance("TextLabel");
-	titleLabel.Size = new UDim2(1, -50, 0, 22);
-	titleLabel.Position = new UDim2(0, 10, 0, 2);
-	titleLabel.BackgroundTransparency = 1;
-	titleLabel.RichText = true;
-	titleLabel.Text = `<font color="#F0F0F0">MCP</font> <font color="#646464">v${CURRENT_VERSION}</font>`;
-	titleLabel.TextColor3 = C.white;
-	titleLabel.TextSize = 12;
-	titleLabel.Font = Enum.Font.GothamBold;
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	titleLabel.Parent = header;
-
-	const creditsLabel = new Instance("TextLabel");
-	creditsLabel.Size = new UDim2(1, -20, 0, 12);
-	creditsLabel.Position = new UDim2(0, 10, 0, 23);
-	creditsLabel.BackgroundTransparency = 1;
-	creditsLabel.RichText = true;
-	creditsLabel.Text = '<font color="#999999">github</font> <font color="#CCCCCC">Chrrxs/robloxstudio-mcp</font>';
-	creditsLabel.TextColor3 = C.muted;
-	creditsLabel.TextSize = 8;
-	creditsLabel.Font = Enum.Font.GothamMedium;
-	creditsLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	creditsLabel.Parent = header;
-
-	const statusContainer = new Instance("Frame");
-	statusContainer.Size = new UDim2(0, 20, 0, 22);
-	statusContainer.Position = new UDim2(1, -26, 0, 2);
-	statusContainer.BackgroundTransparency = 1;
-	statusContainer.Parent = header;
-
-	const statusIndicator = new Instance("Frame");
-	statusIndicator.Size = new UDim2(0, 8, 0, 8);
-	statusIndicator.Position = new UDim2(0.5, -4, 0.5, -4);
-	statusIndicator.BackgroundColor3 = C.red;
-	statusIndicator.BorderSizePixel = 0;
-	statusIndicator.Parent = statusContainer;
-
-	const statusCorner = new Instance("UICorner");
-	statusCorner.CornerRadius = new UDim(1, 0);
-	statusCorner.Parent = statusIndicator;
-
-	const statusPulse = new Instance("Frame");
-	statusPulse.Size = new UDim2(0, 10, 0, 10);
-	statusPulse.Position = new UDim2(0, 0, 0, 0);
-	statusPulse.BackgroundColor3 = C.red;
-	statusPulse.BackgroundTransparency = 0.7;
-	statusPulse.BorderSizePixel = 0;
-	statusPulse.Parent = statusIndicator;
-
-	const pulseCorner = new Instance("UICorner");
-	pulseCorner.CornerRadius = new UDim(1, 0);
-	pulseCorner.Parent = statusPulse;
-
-	const statusText = new Instance("TextLabel");
-	statusText.Size = new UDim2(0, 0, 0, 0);
-	statusText.BackgroundTransparency = 1;
-	statusText.Text = "OFFLINE";
-	statusText.TextTransparency = 1;
-	statusText.TextSize = 1;
-	statusText.Font = Enum.Font.GothamMedium;
-	statusText.TextColor3 = C.white;
-	statusText.Parent = statusContainer;
-
-	const updateBanner = new Instance("Frame");
-	updateBanner.Size = new UDim2(1, -16, 0, 24);
-	updateBanner.Position = new UDim2(0, 8, 0, 42);
-	updateBanner.BackgroundColor3 = Color3.fromRGB(40, 32, 10);
-	updateBanner.BorderSizePixel = 0;
-	updateBanner.Visible = false;
-	updateBanner.Parent = mainFrame;
-
-	const updateBannerCorner = new Instance("UICorner");
-	updateBannerCorner.CornerRadius = new UDim(0, 3);
-	updateBannerCorner.Parent = updateBanner;
-
-	const updateBannerText = new Instance("TextLabel");
-	updateBannerText.Size = new UDim2(1, -16, 1, 0);
-	updateBannerText.Position = new UDim2(0, 8, 0, 0);
-	updateBannerText.BackgroundTransparency = 1;
-	updateBannerText.Text = "";
-	updateBannerText.TextColor3 = C.yellow;
-	updateBannerText.TextSize = 9;
-	updateBannerText.Font = Enum.Font.GothamMedium;
-	updateBannerText.TextXAlignment = Enum.TextXAlignment.Left;
-	updateBannerText.Parent = updateBanner;
-
-	const contentY = 44;
+	const contentY = 62;
 	const contentFrame = new Instance("ScrollingFrame");
-	contentFrame.Size = new UDim2(1, -16, 1, -(contentY + 8));
-	contentFrame.Position = new UDim2(0, 8, 0, contentY);
+	contentFrame.Size = new UDim2(1, -20, 1, -(contentY + 10));
+	contentFrame.Position = new UDim2(0, 10, 0, contentY);
 	contentFrame.BackgroundTransparency = 1;
 	contentFrame.BorderSizePixel = 0;
-	contentFrame.ScrollBarThickness = 2;
+	contentFrame.ScrollBarThickness = 3;
 	contentFrame.ScrollBarImageColor3 = C.subtle;
 	contentFrame.CanvasSize = new UDim2(0, 0, 0, 0);
 	contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y;
 	contentFrame.Parent = mainFrame;
 
-	const card = new Instance("Frame");
-	card.Size = new UDim2(1, 0, 0, 0);
-	card.AutomaticSize = Enum.AutomaticSize.Y;
-	card.BackgroundColor3 = C.card;
-	card.BorderSizePixel = 0;
-	card.LayoutOrder = 1;
-	card.Parent = contentFrame;
+	const contentLayout = new Instance("UIListLayout");
+	contentLayout.Padding = new UDim(0, 10);
+	contentLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	contentLayout.Parent = contentFrame;
 
-	const cardCorner = new Instance("UICorner");
-	cardCorner.CornerRadius = CORNER;
-	cardCorner.Parent = card;
-
-	const cardPadding = new Instance("UIPadding");
-	cardPadding.PaddingLeft = new UDim(0, 10);
-	cardPadding.PaddingRight = new UDim(0, 10);
-	cardPadding.PaddingTop = new UDim(0, 8);
-	cardPadding.PaddingBottom = new UDim(0, 10);
-	cardPadding.Parent = card;
-
-	const cardLayout = new Instance("UIListLayout");
-	cardLayout.Padding = new UDim(0, 6);
-	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder;
-	cardLayout.Parent = card;
+	const connection = card(contentFrame, "CONNECTION", 1);
 
 	const urlInput = new Instance("TextBox");
-	urlInput.Size = new UDim2(1, 0, 0, 26);
+	urlInput.Size = new UDim2(1, 0, 0, 28);
 	urlInput.BackgroundColor3 = C.bg;
 	urlInput.BorderSizePixel = 0;
 	urlInput.Text = State.getActiveConnection().serverUrl;
 	urlInput.TextColor3 = C.label;
-	urlInput.TextSize = 11;
-	urlInput.Font = Enum.Font.GothamMedium;
+	urlInput.TextSize = 12;
+	urlInput.Font = Enum.Font.Code;
 	urlInput.ClearTextOnFocus = false;
-	urlInput.PlaceholderText = "Server URL...";
+	urlInput.PlaceholderText = "http://localhost:58761";
 	urlInput.PlaceholderColor3 = C.muted;
+	urlInput.TextXAlignment = Enum.TextXAlignment.Left;
 	urlInput.LayoutOrder = 1;
-	urlInput.Parent = card;
-
-	const urlCorner = new Instance("UICorner");
-	urlCorner.CornerRadius = CORNER;
-	urlCorner.Parent = urlInput;
+	urlInput.Parent = connection;
+	corner(urlInput);
 
 	const urlPadding = new Instance("UIPadding");
-	urlPadding.PaddingLeft = new UDim(0, 8);
-	urlPadding.PaddingRight = new UDim(0, 8);
+	urlPadding.PaddingLeft = new UDim(0, 10);
+	urlPadding.PaddingRight = new UDim(0, 10);
 	urlPadding.Parent = urlInput;
 
 	urlInput.FocusLost.Connect(() => {
@@ -319,119 +327,94 @@ function init(pluginRef: Plugin) {
 		if (port !== undefined) conn.port = port;
 	});
 
-	const statusRow = new Instance("Frame");
-	statusRow.Size = new UDim2(1, 0, 0, 0);
-	statusRow.AutomaticSize = Enum.AutomaticSize.Y;
-	statusRow.BackgroundTransparency = 1;
-	statusRow.LayoutOrder = 2;
-	statusRow.Parent = card;
+	const statusLabel = text(connection, {
+		Size: new UDim2(1, 0, 0, 16),
+		Text: "Disconnected",
+		TextColor3: C.red,
+		TextSize: 13,
+		Font: Enum.Font.GothamBold,
+		TextWrapped: true,
+		LayoutOrder: 2,
+	});
 
-	const statusLabel = new Instance("TextLabel");
-	statusLabel.Size = new UDim2(1, 0, 0, 18);
-	statusLabel.BackgroundTransparency = 1;
-	statusLabel.Text = "Disconnected";
-	statusLabel.TextColor3 = C.red;
-	statusLabel.TextSize = 10;
-	statusLabel.Font = Enum.Font.GothamBold;
-	statusLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	statusLabel.TextWrapped = true;
-	statusLabel.RichText = false;
-	statusLabel.Parent = statusRow;
-
-	const detailStatusLabel = new Instance("TextLabel");
-	detailStatusLabel.Size = new UDim2(1, 0, 0, 0);
-	detailStatusLabel.Position = new UDim2(0, 0, 0, 18);
-	detailStatusLabel.AutomaticSize = Enum.AutomaticSize.Y;
-	detailStatusLabel.BackgroundTransparency = 1;
-	detailStatusLabel.Text = "HTTP: X  MCP: X";
-	detailStatusLabel.TextColor3 = C.muted;
-	detailStatusLabel.TextSize = 9;
-	detailStatusLabel.Font = Enum.Font.GothamMedium;
-	detailStatusLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	detailStatusLabel.TextWrapped = true;
-	detailStatusLabel.RichText = false;
-	detailStatusLabel.Parent = statusRow;
+	const detailStatusLabel = text(connection, {
+		Size: new UDim2(1, 0, 0, 0),
+		AutomaticSize: Enum.AutomaticSize.Y,
+		Text: "",
+		TextColor3: C.muted,
+		TextSize: 11,
+		TextWrapped: true,
+		LayoutOrder: 3,
+	});
 
 	const stepsFrame = new Instance("Frame");
 	stepsFrame.Size = new UDim2(1, 0, 0, 0);
 	stepsFrame.AutomaticSize = Enum.AutomaticSize.Y;
 	stepsFrame.BackgroundTransparency = 1;
-	stepsFrame.LayoutOrder = 3;
-	stepsFrame.Parent = card;
+	stepsFrame.LayoutOrder = 4;
+	stepsFrame.Parent = connection;
 
 	const stepsLayout = new Instance("UIListLayout");
-	stepsLayout.Padding = new UDim(0, 1);
-	stepsLayout.FillDirection = Enum.FillDirection.Vertical;
+	stepsLayout.Padding = new UDim(0, 3);
 	stepsLayout.SortOrder = Enum.SortOrder.LayoutOrder;
 	stepsLayout.Parent = stepsFrame;
 
-	function createStepRow(text: string, order: number): [Frame, Frame, TextLabel] {
+	function createStepRow(label: string, order: number): [Frame, TextLabel] {
 		const row = new Instance("Frame");
-		row.Size = new UDim2(1, 0, 0, 13);
+		row.Size = new UDim2(1, 0, 0, 16);
 		row.BackgroundTransparency = 1;
 		row.LayoutOrder = order;
-
-		const d = new Instance("Frame");
-		d.Size = new UDim2(0, 4, 0, 4);
-		d.Position = new UDim2(0, 1, 0, 5);
-		d.BackgroundColor3 = C.gray;
-		d.BorderSizePixel = 0;
-		d.Parent = row;
-
-		const dCorner = new Instance("UICorner");
-		dCorner.CornerRadius = new UDim(1, 0);
-		dCorner.Parent = d;
-
-		const lbl = new Instance("TextLabel");
-		lbl.Size = new UDim2(1, -12, 1, 0);
-		lbl.Position = new UDim2(0, 12, 0, 0);
-		lbl.BackgroundTransparency = 1;
-		lbl.Text = text;
-		lbl.TextColor3 = C.dim;
-		lbl.TextSize = 9;
-		lbl.Font = Enum.Font.GothamMedium;
-		lbl.TextXAlignment = Enum.TextXAlignment.Left;
-		lbl.Parent = row;
-
 		row.Parent = stepsFrame;
-		return [row, d, lbl];
+
+		const dot = new Instance("Frame");
+		dot.Size = new UDim2(0, 6, 0, 6);
+		dot.Position = new UDim2(0, 2, 0.5, -3);
+		dot.BackgroundColor3 = C.gray;
+		dot.BorderSizePixel = 0;
+		dot.Parent = row;
+		corner(dot, new UDim(1, 0));
+
+		const lbl = text(row, {
+			Size: new UDim2(1, -16, 1, 0),
+			Position: new UDim2(0, 16, 0, 0),
+			Text: label,
+			TextColor3: C.dim,
+			TextSize: 11,
+		});
+		return [dot, lbl];
 	}
 
-	const [, step1Dot, step1Label] = createStepRow("HTTP server", 1);
-	const [, step2Dot, step2Label] = createStepRow("MCP bridge", 2);
-	const [, step3Dot, step3Label] = createStepRow("Commands", 3);
+	const [step1Dot, step1Label] = createStepRow("Listener", 1);
+	const [step2Dot, step2Label] = createStepRow("Agent link", 2);
+	const [step3Dot, step3Label] = createStepRow("Commands", 3);
 
-	const troubleshootLabel = new Instance("TextLabel");
-	troubleshootLabel.Size = new UDim2(1, 0, 0, 24);
-	troubleshootLabel.BackgroundTransparency = 1;
-	troubleshootLabel.TextWrapped = true;
-	troubleshootLabel.Visible = false;
-	troubleshootLabel.Text = "MCP not responding. Close node.exe and restart server.";
-	troubleshootLabel.TextColor3 = C.yellow;
-	troubleshootLabel.TextSize = 9;
-	troubleshootLabel.Font = Enum.Font.GothamMedium;
-	troubleshootLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	troubleshootLabel.LayoutOrder = 4;
-	troubleshootLabel.Parent = card;
+	const troubleshootLabel = text(connection, {
+		Size: new UDim2(1, 0, 0, 0),
+		AutomaticSize: Enum.AutomaticSize.Y,
+		TextWrapped: true,
+		Visible: false,
+		Text: "No agent has connected yet. Reconnect Lumen in your agent, for example with /mcp in Claude Code.",
+		TextColor3: C.yellow,
+		TextSize: 11,
+		LayoutOrder: 5,
+	});
 
 	const connectButton = new Instance("TextButton");
-	connectButton.Size = new UDim2(1, 0, 0, 28);
-	connectButton.BackgroundColor3 = C.surface;
-	connectButton.BackgroundTransparency = 0;
+	connectButton.Size = new UDim2(1, 0, 0, 30);
+	connectButton.BackgroundColor3 = C.accent;
 	connectButton.BorderSizePixel = 0;
+	connectButton.AutoButtonColor = false;
 	connectButton.Text = "Connect";
-	connectButton.TextColor3 = C.white;
-	connectButton.TextSize = 11;
+	connectButton.TextColor3 = C.bg;
+	connectButton.TextSize = 12;
 	connectButton.Font = Enum.Font.GothamBold;
-	connectButton.LayoutOrder = 5;
-	connectButton.Parent = card;
-
-	const connectCorner = new Instance("UICorner");
-	connectCorner.CornerRadius = CORNER;
-	connectCorner.Parent = connectButton;
+	connectButton.LayoutOrder = 6;
+	connectButton.Parent = connection;
+	corner(connectButton);
 
 	const connectStroke = new Instance("UIStroke");
-	connectStroke.Color = C.subtle;
+	connectStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+	connectStroke.Color = C.accent;
 	connectStroke.Thickness = 1;
 	connectStroke.Parent = connectButton;
 
@@ -440,10 +423,9 @@ function init(pluginRef: Plugin) {
 		const conn = State.getActiveConnection();
 		if (conn && conn.isActive) {
 			tweenProp(connectButton, { BackgroundColor3: C.surface });
-			tweenProp(connectStroke, { Color: Color3.fromRGB(100, 35, 35) });
+			tweenProp(connectStroke, { Color: Color3.fromRGB(120, 44, 44) });
 		} else {
-			tweenProp(connectButton, { BackgroundColor3: C.subtle });
-			tweenProp(connectStroke, { Color: C.muted });
+			tweenProp(connectButton, { BackgroundColor3: Color3.fromRGB(255, 210, 100) });
 		}
 	});
 
@@ -457,13 +439,87 @@ function init(pluginRef: Plugin) {
 		}
 	});
 
+	const session = card(contentFrame, "SESSION", 2);
+
+	function infoRow(key: string, order: number): TextLabel {
+		const row = new Instance("Frame");
+		row.Size = new UDim2(1, 0, 0, 16);
+		row.BackgroundTransparency = 1;
+		row.LayoutOrder = order;
+		row.Parent = session;
+		text(row, {
+			Size: new UDim2(0, 86, 1, 0),
+			Text: key,
+			TextColor3: C.muted,
+			TextSize: 11,
+		});
+		return text(row, {
+			Size: new UDim2(1, -86, 1, 0),
+			Position: new UDim2(0, 86, 0, 0),
+			Text: "-",
+			TextColor3: C.label,
+			TextSize: 11,
+			TextTruncate: Enum.TextTruncate.AtEnd,
+		});
+	}
+
+	const placeValue = infoRow("Place", 1);
+	const peerValue = infoRow("Peer", 2);
+	const requestsValue = infoRow("Requests", 3);
+	const lastValue = infoRow("Last request", 4);
 
 	elements = {
 		screenGui, mainFrame, contentFrame, statusLabel, detailStatusLabel,
 		statusIndicator, statusPulse, statusText, connectButton, connectStroke,
 		urlInput, step1Dot, step1Label, step2Dot, step2Label, step3Dot, step3Label,
-		troubleshootLabel, updateBanner, updateBannerText,
+		troubleshootLabel, placeValue, peerValue, requestsValue, lastValue,
 	};
+
+	updateActivity();
+	// Ages such as "4s ago" only stay true if the open panel refreshes on its own.
+	task.spawn(() => {
+		while (true) {
+			task.wait(1);
+			if (screenGui.Enabled) updateActivity();
+		}
+	});
+}
+
+function peerRole(): string {
+	if (!RunService.IsRunning()) return "edit";
+	return RunService.IsServer() ? "server" : "client";
+}
+
+function ago(seconds: number): string {
+	if (seconds < 2) return "just now";
+	if (seconds < 60) return `${math.floor(seconds)}s ago`;
+	return `${math.floor(seconds / 60)}m ago`;
+}
+
+function updateActivity() {
+	if (!elements) return;
+	const activity = State.getActivity();
+	elements.placeValue.Text = game.Name;
+	elements.peerValue.Text = peerRole();
+	elements.requestsValue.Text = tostring(activity.requests);
+	if (activity.lastEndpoint !== undefined && activity.lastAt !== undefined) {
+		const [name] = string.gsub(activity.lastEndpoint, "^/api/", "");
+		elements.lastValue.Text = `${name}, ${ago(tick() - activity.lastAt)}`;
+	} else {
+		elements.lastValue.Text = "none yet";
+	}
+}
+
+function setPill(color: Color3, label: string) {
+	elements.statusIndicator.BackgroundColor3 = color;
+	elements.statusPulse.BackgroundColor3 = color;
+	elements.statusText.Text = label;
+	elements.statusText.TextColor3 = color;
+}
+
+function setStep(dot: Frame, label: TextLabel, color: Color3, value: string) {
+	dot.BackgroundColor3 = color;
+	label.Text = value;
 }
 
 function updateUIState() {
@@ -472,25 +528,18 @@ function updateUIState() {
 	if (!conn) return;
 	const el = elements;
 	const diagnostics = State.getTransportDiagnostics(tick());
+	el.statusLabel.Text = diagnostics.status;
+	el.detailStatusLabel.Text = diagnostics.detail;
 
 	if (!conn.isActive) {
-		el.statusLabel.Text = diagnostics.status;
-		el.statusLabel.TextColor3 = C.muted;
-		el.statusIndicator.BackgroundColor3 = C.red;
-		el.statusPulse.BackgroundColor3 = C.red;
-		el.statusText.Text = "OFFLINE";
-		el.detailStatusLabel.Text = diagnostics.detail;
+		el.statusLabel.TextColor3 = C.dim;
 		el.detailStatusLabel.TextColor3 = C.muted;
+		setPill(C.red, "Offline");
 		stopPulseAnimation();
-
-		el.step1Dot.BackgroundColor3 = C.gray;
-		el.step1Label.Text = "HTTP server";
-		el.step2Dot.BackgroundColor3 = C.gray;
-		el.step2Label.Text = "MCP bridge";
-		el.step3Dot.BackgroundColor3 = C.gray;
-		el.step3Label.Text = "Commands";
+		setStep(el.step1Dot, el.step1Label, C.gray, "Listener");
+		setStep(el.step2Dot, el.step2Label, C.gray, "Agent link");
+		setStep(el.step3Dot, el.step3Label, C.gray, "Commands");
 		el.troubleshootLabel.Visible = false;
-
 		if (!buttonHover) setButtonConnect(el.connectButton, el.connectStroke);
 		el.urlInput.TextEditable = true;
 		el.urlInput.BackgroundColor3 = C.bg;
@@ -499,56 +548,35 @@ function updateUIState() {
 
 	if (!buttonHover) setButtonDisconnect(el.connectButton, el.connectStroke);
 	el.urlInput.TextEditable = false;
-	el.urlInput.BackgroundColor3 = C.card;
+	el.urlInput.BackgroundColor3 = C.surface;
 
 	if (conn.lastHttpOk && conn.lastMcpOk) {
-		el.statusLabel.Text = diagnostics.status;
-		el.statusLabel.TextColor3 = Color3.fromRGB(34, 197, 94);
-		el.statusIndicator.BackgroundColor3 = Color3.fromRGB(34, 197, 94);
-		el.statusPulse.BackgroundColor3 = Color3.fromRGB(34, 197, 94);
-		el.statusText.Text = "ONLINE";
-		el.detailStatusLabel.Text = diagnostics.detail;
-		el.detailStatusLabel.TextColor3 = Color3.fromRGB(34, 197, 94);
-		el.step1Dot.BackgroundColor3 = Color3.fromRGB(34, 197, 94);
-		el.step1Label.Text = "HTTP server (OK)";
-		el.step2Dot.BackgroundColor3 = Color3.fromRGB(34, 197, 94);
-		el.step2Label.Text = "MCP bridge (OK)";
-		el.step3Dot.BackgroundColor3 = Color3.fromRGB(34, 197, 94);
-		el.step3Label.Text = "Commands (OK)";
+		el.statusLabel.TextColor3 = C.green;
+		el.detailStatusLabel.TextColor3 = C.dim;
+		setPill(C.green, "Online");
+		setStep(el.step1Dot, el.step1Label, C.green, "Listener ready");
+		setStep(el.step2Dot, el.step2Label, C.green, "Agent connected");
+		setStep(el.step3Dot, el.step3Label, C.green, "Commands flowing");
 		el.troubleshootLabel.Visible = false;
 		stopPulseAnimation();
 	} else if (conn.lastHttpOk && !conn.lastMcpOk) {
-		el.statusLabel.Text = diagnostics.status;
-		el.statusLabel.TextColor3 = Color3.fromRGB(245, 158, 11);
-		el.statusIndicator.BackgroundColor3 = Color3.fromRGB(245, 158, 11);
-		el.statusPulse.BackgroundColor3 = Color3.fromRGB(245, 158, 11);
-		el.statusText.Text = "WAITING";
-		el.detailStatusLabel.Text = diagnostics.detail;
-		el.detailStatusLabel.TextColor3 = Color3.fromRGB(245, 158, 11);
-		el.step1Dot.BackgroundColor3 = Color3.fromRGB(34, 197, 94);
-		el.step1Label.Text = "HTTP server (OK)";
-		el.step2Dot.BackgroundColor3 = Color3.fromRGB(245, 158, 11);
-		el.step2Label.Text = "MCP bridge (waiting...)";
-		el.step3Dot.BackgroundColor3 = Color3.fromRGB(245, 158, 11);
-		el.step3Label.Text = "Commands (waiting...)";
+		el.statusLabel.TextColor3 = C.yellow;
+		el.detailStatusLabel.TextColor3 = C.dim;
+		setPill(C.yellow, "Waiting");
+		setStep(el.step1Dot, el.step1Label, C.green, "Listener ready");
+		setStep(el.step2Dot, el.step2Label, C.yellow, "Waiting for your agent");
+		setStep(el.step3Dot, el.step3Label, C.gray, "Commands");
 		const elapsed = conn.mcpWaitStartTime !== undefined ? tick() - conn.mcpWaitStartTime : 0;
 		el.troubleshootLabel.Visible = elapsed > 8;
 		startPulseAnimation();
 	} else {
 		const retrying = conn.nextRetryAt !== undefined;
-		el.statusLabel.Text = diagnostics.status;
 		el.statusLabel.TextColor3 = C.yellow;
-		el.statusIndicator.BackgroundColor3 = C.yellow;
-		el.statusPulse.BackgroundColor3 = C.yellow;
-		el.statusText.Text = retrying ? "RETRY" : "CONNECTING";
-		el.detailStatusLabel.Text = diagnostics.detail;
-		el.detailStatusLabel.TextColor3 = C.yellow;
-		el.step1Dot.BackgroundColor3 = C.yellow;
-		el.step1Label.Text = retrying ? "Listener (disconnected)" : "Listener (connecting...)";
-		el.step2Dot.BackgroundColor3 = C.gray;
-		el.step2Label.Text = "MCP client (waiting for listener)";
-		el.step3Dot.BackgroundColor3 = C.gray;
-		el.step3Label.Text = "Commands (waiting for listener)";
+		el.detailStatusLabel.TextColor3 = C.dim;
+		setPill(C.yellow, retrying ? "Retrying" : "Connecting");
+		setStep(el.step1Dot, el.step1Label, C.yellow, retrying ? "Listener lost, retrying" : "Reaching the listener");
+		setStep(el.step2Dot, el.step2Label, C.gray, "Agent link");
+		setStep(el.step3Dot, el.step3Label, C.gray, "Commands");
 		el.troubleshootLabel.Visible = false;
 		startPulseAnimation();
 	}
@@ -558,11 +586,10 @@ export = {
 	elements: undefined as unknown as UIElements,
 	init,
 	updateUIState,
+	updateActivity,
 	stopPulseAnimation,
 	startPulseAnimation,
 	setToolbarButton,
 	updateToolbarIcon,
-	showBanner,
-	hideBanner,
 	getElements: () => elements,
 };

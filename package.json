@@ -1,6 +1,6 @@
 {
-  "name": "@chrrxs/robloxstudio-mcp-monorepo",
-  "version": "3.2.0",
+  "name": "lumen-mcp-monorepo",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w packages/core && npm run build -w packages/robloxstudio-mcp && npm run build -w packages/robloxstudio-mcp-inspector",
+    "build": "npm run build -w packages/core && npm run build -w packages/lumen-mcp && npm run build -w packages/lumen-mcp-inspector",
     "compile:plugin": "npm --prefix studio-plugin run build",
     "build:plugin": "npm run compile:plugin && node scripts/build-plugin.mjs",
     "build:plugin:artifact": "npm run compile:plugin && node scripts/build-plugin.mjs --build-only",
@@ -18,10 +18,10 @@
     "build:plugins": "npm run compile:plugin && node scripts/build-plugin.mjs --variant inspector && node scripts/build-plugin.mjs",
     "build:all": "npm run build && npm run build:plugins",
     "clean": "npm exec --workspaces -- npx rimraf dist",
-    "dev": "npm run build -w packages/core && tsx packages/robloxstudio-mcp/src/index.ts",
-    "dev:inspector": "npm run build -w packages/core && tsx packages/robloxstudio-mcp-inspector/src/index.ts",
-    "start": "node packages/robloxstudio-mcp/dist/index.js",
-    "start:inspector": "node packages/robloxstudio-mcp-inspector/dist/index.js",
+    "dev": "npm run build -w packages/core && tsx packages/lumen-mcp/src/index.ts",
+    "dev:inspector": "npm run build -w packages/core && tsx packages/lumen-mcp-inspector/src/index.ts",
+    "start": "node packages/lumen-mcp/dist/index.js",
+    "start:inspector": "node packages/lumen-mcp-inspector/dist/index.js",
     "lint": "eslint packages/*/src/**/*.ts",
     "typecheck": "tsc --noEmit -p packages/core/tsconfig.json",
     "test": "npm test -w packages/core && npm run test:asset-security && npm run test:package-contents && npm run test:runner && npm run test:port-isolation",
@@ -71,5 +71,6 @@
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0"
-  }
+  },
+  "license": "MIT"
 }

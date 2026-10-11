@@ -368,7 +368,7 @@ function captureRead(requestData: Record<string, unknown>): unknown {
 // instead and needs to know where the 3D viewport sits inside that window.
 // Four small magenta squares pinned to the viewport corners give it an exact,
 // DPI-independent answer; the server hides them again before the real capture.
-const MARKER_GUI_NAME = "__MCPCaptureMarkers";
+const MARKER_GUI_NAME = "__LumenCaptureMarkers";
 const MARKER_SIZE = 12;
 const MARKER_COLOR = Color3.fromRGB(255, 0, 255);
 // Safety net: the server always hides the markers itself, but if it dies

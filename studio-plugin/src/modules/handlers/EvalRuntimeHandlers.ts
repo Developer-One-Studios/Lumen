@@ -2,7 +2,7 @@ import { LogService, ReplicatedStorage, RunService, ServerScriptService } from "
 import { BRIDGE_NAMES, ensureRuntimeBridgeInstalled } from "../EvalBridges";
 import LuauExec from "../LuauExec";
 
-const PAYLOAD_INSTANCE_NAME = "__MCPEvalPayload";
+const PAYLOAD_INSTANCE_NAME = "__LumenEvalPayload";
 
 interface BridgeInvokeResult {
 	ok?: boolean;
@@ -80,7 +80,7 @@ function evalRuntime(requestData: Record<string, unknown>) {
 	const m = new Instance("ModuleScript");
 	m.Name = PAYLOAD_INSTANCE_NAME;
 	const userLines = LuauExec.countLines(code);
-	const wrapped = LuauExec.buildWrapper(code, PAYLOAD_INSTANCE_NAME);
+	const wrapped = LuauExec.buildWrapper(code, PAYLOAD_INSTANCE_NAME, LuauExec.deadlineOf(requestData));
 
 	const [okSet, setErr] = pcall(() => {
 		(m as unknown as { Source: string }).Source = wrapped;

@@ -117,7 +117,7 @@ function isNativeFunction(func: FunctionInfo): boolean {
 
 function isPluginFunction(func: FunctionInfo): boolean {
 	if (bit32.band(flagsOf(func), 2) !== 0) return true;
-	return typeIs(func.Source, "string") && string.find(func.Source, "MCPPlugin", 1, true)[0] !== undefined;
+	return typeIs(func.Source, "string") && string.find(func.Source, "LumenPlugin", 1, true)[0] !== undefined;
 }
 
 function isDebugLabel(func: FunctionInfo, filter: string | undefined): boolean {

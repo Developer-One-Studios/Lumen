@@ -37,7 +37,7 @@ export interface StudioPlatformCapabilities {
 }
 
 const WSL_KERNEL_PATTERN = /microsoft|wsl/i;
-const WINDOWS_INTEROP_PROBE_TOKEN = 'ROBLOXSTUDIO_MCP_WINDOWS_INTEROP_OK';
+const WINDOWS_INTEROP_PROBE_TOKEN = 'LUMEN_MCP_WINDOWS_INTEROP_OK';
 const WINDOWS_POWERSHELL =
   '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe';
 

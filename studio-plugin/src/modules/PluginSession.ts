@@ -12,11 +12,11 @@ interface StudioTestServiceWithEditMode extends StudioTestService {
 const CoreGui = game.GetService("CoreGui");
 const StudioTestService = game.GetService("StudioTestService") as StudioTestServiceWithEditMode;
 
-const LEGACY_PLACE_ID_ATTRIBUTE = "__MCPPlaceId";
-const TOPOLOGY_MODE_ATTRIBUTE = "__MCPTopologyMode";
-const TOPOLOGY_INSTANCE_ID_ATTRIBUTE = "__MCPTopologyInstanceId";
-const TOPOLOGY_GROUP_ID_ATTRIBUTE = "__MCPTopologyGroupId";
-const TOPOLOGY_TOKEN_ATTRIBUTE = "__MCPTopologyToken";
+const LEGACY_PLACE_ID_ATTRIBUTE = "__LumenPlaceId";
+const TOPOLOGY_MODE_ATTRIBUTE = "__LumenTopologyMode";
+const TOPOLOGY_INSTANCE_ID_ATTRIBUTE = "__LumenTopologyInstanceId";
+const TOPOLOGY_GROUP_ID_ATTRIBUTE = "__LumenTopologyGroupId";
+const TOPOLOGY_TOKEN_ATTRIBUTE = "__LumenTopologyToken";
 // Older plugin versions saved these into places. Nothing MCP-owned belongs in a
 // saved or published DataModel, so edit sessions remove them on load.
 const LEGACY_TOPOLOGY_ATTRIBUTES = [
@@ -25,7 +25,7 @@ const LEGACY_TOPOLOGY_ATTRIBUTES = [
 	TOPOLOGY_GROUP_ID_ATTRIBUTE,
 	TOPOLOGY_TOKEN_ATTRIBUTE,
 ];
-const SESSION_IDENTITY_NAME = "__MCPSessionIdentity";
+const SESSION_IDENTITY_NAME = "__LumenSessionIdentity";
 // Attributes on the CoreGui identity value: CoreGui survives plugin reloads but
 // is never saved with the place or copied into playtest DataModels.
 const PLAY_RECORD_ATTRIBUTE = "PlayRecord";

@@ -11,7 +11,10 @@ import type { PublicStudioInstance, PublicStudioPeer, RegisterPeerResult } from 
 import type { ToolDefinition } from './tools/definitions.js';
 import { createToolHttpHandler, normalizeToolResult, publicToolErrorBody } from './mcp-runtime.js';
 import type { ToolInvocationContext } from './mcp-runtime.js';
-import { tokensMatch } from './auth.js';
+import { proxyChallengeProof, tokensMatch } from './auth.js';
+import { assertNotSynced, assertSubtreeNotSynced, sourcemaps } from './tools/fork-tools.js';
+import { FORK_FEATURES } from './tools/fork/index.js';
+import { retryEditIgnoringWhitespace } from './tools/fork/fuzzy-edit.js';
 import { StudioLaunchPreDispatchError } from './studio-instance-manager.js';
 import { HTTP_BODY_LIMIT_BYTES } from './http-body-limits.js';
 import {
@@ -206,18 +209,32 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
     const { startLine, endLine } = optionalLineRange(body, 'get_script_source');
     return tools.getScriptSource(body.instancePath, startLine, endLine, body.instance_id);
   },
-  set_script_source: (tools, body) => tools.setScriptSource(body.instancePath, body.source, body.instance_id),
-  edit_script_lines: (tools, body) => tools.editScriptLines(body.instancePath, body.old_string, body.new_string, optionalLineAnchor(body, 'edit_script_lines'), body.instance_id),
-  insert_script_lines: (tools, body) => tools.insertScriptLines(body.instancePath, body.afterLine, body.newContent, body.instance_id),
-  delete_script_lines: (tools, body) => {
+  set_script_source: async (tools, body) => {
+    await assertNotSynced(body.instancePath);
+    return tools.setScriptSource(body.instancePath, body.source, body.instance_id);
+  },
+  edit_script_lines: async (tools, body) => {
+    await assertNotSynced(body.instancePath);
+    const line = optionalLineAnchor(body, 'edit_script_lines');
+    const result = await tools.editScriptLines(body.instancePath, body.old_string, body.new_string, line, body.instance_id);
+    return retryEditIgnoringWhitespace(tools, result, {
+      path: body.instancePath, oldString: body.old_string, newString: body.new_string, line, instanceId: body.instance_id,
+    });
+  },
+  insert_script_lines: async (tools, body) => {
+    await assertNotSynced(body.instancePath);
+    return tools.insertScriptLines(body.instancePath, body.afterLine, body.newContent, body.instance_id);
+  },
+  delete_script_lines: async (tools, body) => {
     const { startLine, endLine } = requiredClosedLineRange(body, 'delete_script_lines');
+    await assertNotSynced(body.instancePath);
     return tools.deleteScriptLines(body.instancePath, startLine, endLine, body.instance_id);
   },
   get_attributes: (tools, body) => tools.getAttributes(body.instancePath, body.instance_id),
   selection: (tools, body) => tools.selection(body.action, body, body.instance_id),
-  execute_luau: (tools, body) => tools.executeLuau(body.code, body.target, body.instance_id, body.operation_id),
-  eval_server_runtime: (tools, body) => tools.evalServerRuntime(body.code, body.instance_id),
-  eval_client_runtime: (tools, body) => tools.evalClientRuntime(body.code, body.target, body.instance_id),
+  execute_luau: async (tools, body) => annotateSources(await tools.executeLuau(body.code, body.target, body.instance_id, body.operation_id, body.timeout_s)),
+  eval_server_runtime: async (tools, body) => annotateSources(await tools.evalServerRuntime(body.code, body.instance_id, body.timeout_s)),
+  eval_client_runtime: async (tools, body) => annotateSources(await tools.evalClientRuntime(body.code, body.target, body.instance_id, body.timeout_s)),
   set_network_profile: (tools, body) => tools.setNetworkProfile(body.profile, body.target, body.overrides, body.instance_id),
   get_simulation_state: (tools, body) => tools.getSimulationState(body.include, body.target, body.instance_id),
   reset_simulation_state: (tools, body) => tools.resetSimulationState(body.target, body.network, body.deviceSimulator, body.instance_id),
@@ -228,7 +245,7 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   manage_monetization: (tools, body) => tools.manageMonetization(body, body.instance_id),
   solo_playtest: (tools, body) => tools.soloPlaytest(body.action, body.mode, body.timeout, body.instance_id),
   multiplayer_playtest: (tools, body) => tools.multiplayerPlaytest(body.action, body.numPlayers, body.target, body.testArgs, body.value, body.timeout, body.instance_id),
-  get_runtime_logs: (tools, body, context) => tools.getRuntimeLogs(body.instance_id, body.multiplayer_group_id, body.cursor, body.cursor_by_instance, body.tail, body.filter, context?.signal),
+  get_runtime_logs: async (tools, body, context) => annotateSources(await tools.getRuntimeLogs(body.instance_id, body.multiplayer_group_id, body.cursor, body.cursor_by_instance, body.tail, body.filter, context?.signal)),
   capture_script_profiler: (tools, body) => tools.captureScriptProfiler(body.target, {
     duration_ms: body.duration_ms,
     frequency: body.frequency,
@@ -259,7 +276,7 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
     max_comparison_rows: body.max_comparison_rows,
     output_path: body.output_path,
   }, body.instance_id),
-  breakpoints: (tools, body) => tools.breakpoints(body.action, body, body.target, body.instance_id),
+  breakpoints: async (tools, body) => annotateSources(await tools.breakpoints(body.action, body, body.target, body.instance_id)),
   get_connected_instances: (tools) => tools.getConnectedInstances(),
   search_assets: (tools, body) => tools.searchAssets(body.assetType, body.query, body.maxResults, body.sortBy, body.robloxCreatedOnly),
   get_asset_details: (tools, body) => tools.getAssetDetails(body.assetId),
@@ -275,22 +292,70 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
     body.maxAudioPreviews,
   ),
   upload_asset: (tools, body) => tools.uploadAsset(body.filePath, body.assetType, body.displayName, body.description, body.userId, body.groupId),
-  capture_screenshot: (tools, body) => tools.captureScreenshot(body.instance_id, body.format, body.quality),
-  simulate_mouse_input: (tools, body) => tools.simulateMouseInput(body.action, body.x, body.y, body.button, body.scrollDirection, body.target, body.instance_id),
+  capture_screenshot: async (tools, body) => {
+    // Ignoring these would silently return the current view instead of the requested one.
+    if (body.views !== undefined || body.camera_position !== undefined || body.look_at !== undefined) {
+      throw new Error('capture_screenshot does not move the camera. Use capture_views, which the read-only edition does not offer.');
+    }
+    // Serialized so it never shoots the temporary camera of a running capture_views.
+    return tools.fork.serializeCapture(() => tools.captureScreenshot(body.instance_id, body.format, body.quality, {
+      max_width: body.max_width,
+      clients: body.clients,
+    }));
+  },
+  simulate_mouse_input: async (tools, body) => {
+    if (typeof body.instance_path !== 'string') {
+      return tools.simulateMouseInput(body.action, body.x, body.y, body.button, body.scrollDirection, body.target, body.instance_id);
+    }
+    const centre = await tools.fork.guiCenter(body.instance_path, body.target, body.instance_id);
+    return tools.simulateMouseInput(body.action, centre.x, centre.y, body.button, body.scrollDirection, body.target, body.instance_id);
+  },
   simulate_keyboard_input: (tools, body) => tools.simulateKeyboardInput(body.keyCode, body.action, body.duration, body.text, body.target, body.instance_id),
   get_memory_breakdown: (tools, body) => tools.getMemoryBreakdown(body.target, body.tags, body.instance_id),
   get_scene_analysis: (tools, body) => tools.getSceneAnalysis(body.mode, body.target, body.topN, body.raw, body.instance_id),
   export_rbxm: (tools, body) => tools.exportRbxm(body.instance_paths, body.output_path, body.target, body.instance_id),
   import_rbxm: (tools, body, context) => tools.importRbxm(body.source, body.parent_path, body.target, body.instance_id, context?.signal),
-  find_and_replace_in_scripts: (tools, body) => tools.findAndReplaceInScripts(body.pattern, body.replacement, {
-    caseSensitive: body.caseSensitive,
-    usePattern: body.usePattern,
-    path: body.path,
-    classFilter: body.classFilter,
-    dryRun: body.dryRun,
-    maxReplacements: body.maxReplacements,
-  }, body.instance_id),
+  find_and_replace_in_scripts: async (tools, body) => {
+    await assertSubtreeNotSynced(body.path, body.dryRun === true);
+    return tools.findAndReplaceInScripts(body.pattern, body.replacement, {
+      caseSensitive: body.caseSensitive,
+      usePattern: body.usePattern,
+      path: body.path,
+      classFilter: body.classFilter,
+      dryRun: body.dryRun,
+      maxReplacements: body.maxReplacements,
+    }, body.instance_id);
+  },
+  perf_stats: (tools, body) => tools.fork.perfStats(body),
+  lag_audit: (tools, body) => tools.fork.lagAudit(body),
+  profile_toggle: (tools, body) => tools.fork.profileToggle(body),
+  leak_check: (tools, body) => tools.fork.leakCheck(body),
+  replication_diff: (tools, body) => tools.fork.replicationDiff(body),
+  fuzz_remotes: (tools, body) => tools.fork.fuzzRemotes(body),
+  inspect_gui: (tools, body) => tools.fork.inspectGui(body),
+  navigate_character: (tools, body) => tools.fork.navigateCharacter(body),
+  multi_edit: (tools, body) => tools.fork.multiEdit(body),
+  resolve_source: (tools, body) => tools.fork.resolveSource(body),
+  run_tests: (tools, body) => tools.fork.runTests(body),
+  audit_assets: (tools, body) => tools.fork.auditAssets(body),
+  datastore_read: (tools, body) => tools.fork.datastoreRead(body),
+  ...Object.fromEntries(FORK_FEATURES.flatMap((feature) => Object.entries(feature.handlers))),
 };
+
+// Studio locations in logs and errors gain the Rojo file and line they came from.
+function annotateSources<T extends { content: Array<{ type: string; text?: string }> }>(result: T): T {
+  return {
+    ...result,
+    content: result.content.map((item) => {
+      if (item.type !== 'text' || typeof item.text !== 'string') return item;
+      try {
+        return { ...item, text: JSON.stringify(sourcemaps.annotateValue(JSON.parse(item.text))) };
+      } catch {
+        return { ...item, text: sourcemaps.annotateText(item.text) };
+      }
+    }),
+  };
+}
 
 const MAX_STUDIO_SESSIONS = 256;
 
@@ -500,7 +565,7 @@ export function createHttpServer(tools: RobloxStudioTools, bridge: BridgeService
     res.status(401).json({
       error: 'unauthorized',
       message: 'Missing or invalid auth token. Send it as "X-MCP-Auth: <token>" or "Authorization: Bearer <token>". ' +
-        (security?.authTokenHint ?? 'The token is in ~/.robloxstudio-mcp/auth-token (or ROBLOX_STUDIO_AUTH_TOKEN).'),
+        (security?.authTokenHint ?? 'The token is in ~/.lumen-mcp/auth-token (or ROBLOX_STUDIO_AUTH_TOKEN).'),
     });
   });
 
@@ -531,14 +596,24 @@ export function createHttpServer(tools: RobloxStudioTools, bridge: BridgeService
   app.use(handleBodySizeError);
 
 
+  // Proxy-mode siblings check this before sending the token, so a process squatting the port learns nothing.
+  app.get('/proxy-challenge', (req, res) => {
+    const nonce = typeof req.query.nonce === 'string' ? req.query.nonce : '';
+    if (!authToken || !/^[0-9a-f]{32,128}$/.test(nonce)) {
+      res.status(400).json({ error: 'invalid_challenge' });
+      return;
+    }
+    res.json({ proof: proxyChallengeProof(authToken, nonce) });
+  });
+
   app.get('/health', (req, res) => {
     const peers = bridge.getPublicPeers().map(toPassivePeer);
     const instances = bridge.getPublicInstances().map(toPassiveInstance);
     const multiplayerGroups = bridge.getPublicMultiplayerGroups();
     res.json({
       status: 'ok',
-      service: 'robloxstudio-mcp',
-      serverName: serverConfig?.name ?? 'robloxstudio-mcp',
+      service: 'lumen-mcp',
+      serverName: serverConfig?.name ?? 'lumen-mcp',
       version: serverConfig?.version,
       serverVersion: serverConfig?.version,
       capabilities: studioLifecycleCallable ? {
@@ -737,7 +812,8 @@ export function createHttpServer(tools: RobloxStudioTools, bridge: BridgeService
         error: result.error.code,
         message: result.error.message,
         request: requestContext,
-        existing: result.error.existing,
+        // The peer id is the only secret a re-registration needs, echoing it lets any local process take over that peer's socket.
+        existing: { ...result.error.existing, peerId: undefined },
       });
       return;
     }

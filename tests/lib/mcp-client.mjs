@@ -1,6 +1,6 @@
 // Shared utility for integration tests under tests/.
 //
-// Spawns the built MCP server (packages/robloxstudio-mcp/dist/index.js) as a
+// Spawns the built MCP server (packages/lumen-mcp/dist/index.js) as a
 // subprocess and drives it via stdio JSON-RPC. Every subprocess in one suite
 // shares BASE_PORT: the first is primary and later subprocesses proxy through
 // it. Self-contained suite wrappers assign distinct ports so concurrent
@@ -19,7 +19,7 @@ import { withStudioTestToolLaunch } from '../../scripts/studio-test-safety.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(__dirname, '..', '..');
-export const DIST = resolve(REPO_ROOT, 'packages/robloxstudio-mcp/dist/index.js');
+export const DIST = resolve(REPO_ROOT, 'packages/lumen-mcp/dist/index.js');
 export const BASE_PORT = testBasePort();
 
 const ROUTED_TOOLS = new Set([

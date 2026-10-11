@@ -9,7 +9,7 @@ const Selection = game.GetService("Selection");
 const { getInstancePath } = Utils;
 const { beginRecording, finishRecording } = Recording;
 
-const OUTPUT_FOLDER_NAME = "__MCPGeneratedModels";
+const OUTPUT_FOLDER_NAME = "__LumenGeneratedModels";
 const GENERATE_MODEL_MODERATION_RETRIES = 2;
 
 type AssetImageInput = {

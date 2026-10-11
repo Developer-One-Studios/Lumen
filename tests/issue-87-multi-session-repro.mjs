@@ -22,7 +22,7 @@ assert(countArg.length <= 1 && (!countArg.length || /^--sessions=\d+$/.test(coun
 const count = Number(countArg[0]?.split('=')[1] ?? 9);
 assert(Number.isInteger(count) && count >= 2 && count <= 32, 'sessions must be 2..32');
 assert(process.platform !== 'win32', 'This harness requires POSIX SIGUSR2');
-const { version } = JSON.parse(await readFile(join(root, 'packages/robloxstudio-mcp/package.json'), 'utf8'));
+const { version } = JSON.parse(await readFile(join(root, 'packages/lumen-mcp/package.json'), 'utf8'));
 const scratch = await mkdtemp(join(tmpdir(), 'rsmcp-issue87-'));
 const preload = join(scratch, 'clock.mjs');
 const sessions = [];
@@ -91,13 +91,13 @@ async function health() {
 async function startSession(index, expectedRole) {
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: ['--import', preload, resolve(root, 'packages/robloxstudio-mcp/dist/index.js')],
+    args: ['--import', preload, resolve(root, 'packages/lumen-mcp/dist/index.js')],
     cwd: root,
     env: {
       PATH: process.env.PATH ?? '', HOME: scratch,
       ROBLOX_STUDIO_PORT: new URL(base).port, ROBLOX_STUDIO_HOST: '127.0.0.1',
       ROBLOX_STUDIO_NO_AUTH: '1',
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: join(scratch, 'registry'),
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: join(scratch, 'registry'),
       // Abort instead of forwarding to an unrelated owner if the ephemeral
       // reservation-to-bind race loses. Proxies still use real production logic.
       ROBLOX_STUDIO_REQUIRE_PRIMARY: expectedRole === 'primary' ? '1' : '0',

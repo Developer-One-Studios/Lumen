@@ -9,7 +9,7 @@ import { ManagedInstanceRegistry, type ManagedInstanceRegistryRecord } from '../
 
 describe('ManagedInstanceRegistry lock lifecycle', () => {
   test('a lock retry does not keep an otherwise idle Node process alive', async () => {
-    const registryDir = await fs.mkdtemp(path.join(os.tmpdir(), 'robloxstudio-mcp-lock-test-'));
+    const registryDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lumen-mcp-lock-test-'));
     const lockDir = path.join(registryDir, '.lock');
     await fs.mkdir(lockDir);
     await fs.writeFile(path.join(lockDir, 'owner.json'), JSON.stringify({
@@ -61,7 +61,7 @@ describe('ManagedInstanceRegistry lock lifecycle', () => {
 
 describe('ManagedInstanceRegistry process observation', () => {
   test('a sweep observation older than the record leaves a live launch open', async () => {
-    const registryDir = await fs.mkdtemp(path.join(os.tmpdir(), 'robloxstudio-mcp-sweep-test-'));
+    const registryDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lumen-mcp-sweep-test-'));
     const registry = new ManagedInstanceRegistry(registryDir);
     const launch: ManagedInstanceRegistryRecord = {
       version: 1,

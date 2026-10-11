@@ -79,7 +79,7 @@ async function installPlugin(worker) {
   });
   const [code, signal] = await once(child, 'exit');
   if (signal || code !== 0) throw new Error(`Worker ${worker.index + 1} plugin installer exited ${signal ?? code ?? 1}`);
-  const installedArtifact = readFileSync(path.join(worker.directory.pluginsDirectory, 'MCPPlugin.rbxmx'));
+  const installedArtifact = readFileSync(path.join(worker.directory.pluginsDirectory, 'LumenPlugin.rbxmx'));
   const expectedArtifact = configurePluginAssetForPort(worker.sourceArtifact, String(worker.lease.port));
   assert.ok(installedArtifact.equals(expectedArtifact), `Worker ${worker.index + 1} installed plugin differs from its intended build beyond the allowed port and saved-URL key configuration`);
   worker.installedSource = installedArtifact.toString('utf8');
@@ -132,8 +132,8 @@ try {
   // Optional roots exercise two different worktree builds, not a shared globally installed plugin.
   for (let index = 0; index < WORKER_COUNT; index += 1) {
     const repoRoot = path.resolve(process.env[`RSMCP_PARALLEL_REPO_ROOT_${index + 1}`] ?? REPO_ROOT);
-    const dist = path.join(repoRoot, 'packages/robloxstudio-mcp/dist/index.js');
-    const sourcePlugin = path.join(repoRoot, 'studio-plugin/MCPPlugin.rbxmx');
+    const dist = path.join(repoRoot, 'packages/lumen-mcp/dist/index.js');
+    const sourcePlugin = path.join(repoRoot, 'studio-plugin/LumenPlugin.rbxmx');
     accessSync(dist);
     const sourceArtifact = readFileSync(sourcePlugin);
     workers.push({ index, repoRoot, dist, sourcePlugin, sourceArtifact, marker: `RsmcpParallel_${runId}_${index}`, token: `${runId}:${index}` });
@@ -156,7 +156,7 @@ try {
       ROBLOX_STUDIO_REQUIRE_PRIMARY: '1',
       RSMCP_AUTO_ASSIGNED_PORT: '0',
       RSMCP_STUDIO_WORKING_DIRECTORY: worker.directory.workingDirectory,
-      ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.directory.managedInstanceRegistryDirectory,
+      LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.directory.managedInstanceRegistryDirectory,
       ROBLOX_STUDIO_EXE: process.env[`RSMCP_PARALLEL_STUDIO_EXE_${worker.index + 1}`] ?? process.env.ROBLOX_STUDIO_EXE ?? '',
     };
   }));

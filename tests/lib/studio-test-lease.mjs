@@ -20,8 +20,8 @@ const DEFAULT_STALE_MS = 2 * 60 * 1000;
 const MIN_STALE_MS = 5000;
 const LEASE_NAME_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const PROTECTED_PLUGIN_ASSETS = new Set([
-  'MCPPlugin.rbxmx',
-  'MCPInspectorPlugin.rbxmx',
+  'LumenPlugin.rbxmx',
+  'LumenInspectorPlugin.rbxmx',
   '000_RSMCP_EditHistoryRepro.rbxmx',
 ]);
 const PLUGIN_BACKUP_DIR = 'plugin-backup.pending';
@@ -45,7 +45,7 @@ export function defaultStudioTestLeaseRoot(env = process.env) {
   }
   // WSL and native Windows resolve different path strings here, but both map
   // to the same physical directory beside %LOCALAPPDATA%/Roblox/Plugins.
-  return path.join(path.resolve(resolvePluginsDir()), '..', '.robloxstudio-mcp-test-leases');
+  return path.join(path.resolve(resolvePluginsDir()), '..', '.lumen-mcp-test-leases');
 }
 
 function ensureLeaseTarget(leaseRoot, name) {
@@ -55,7 +55,7 @@ function ensureLeaseTarget(leaseRoot, name) {
   mkdirSync(leaseRoot, { recursive: true });
   const target = path.join(leaseRoot, `${name}.resource`);
   try {
-    writeFileSync(target, 'robloxstudio-mcp Studio test resource\n', {
+    writeFileSync(target, 'lumen-mcp Studio test resource\n', {
       encoding: 'utf8',
       flag: 'wx',
       mode: 0o600,

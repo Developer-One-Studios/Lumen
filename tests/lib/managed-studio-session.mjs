@@ -294,7 +294,7 @@ export async function openManagedStudioSession(
       const retained = new Error(
         'Studio close could not be confirmed; retained staged place ' +
         `${stagedPlace?.path ?? '(none)'} and registry ` +
-        `${sessionEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR} for exact-identity recovery.`,
+        `${sessionEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR} for exact-identity recovery.`,
       );
       retained.retainedStudioResources = true;
       errors.push(retained);
@@ -322,12 +322,12 @@ export async function openManagedStudioSession(
   try {
     await adapters.assertTestProfile();
     await adapters.assertDirectoryIsolation();
-    if (!sessionEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR?.trim()) {
+    if (!sessionEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR?.trim()) {
       registry = await adapters.createRegistry();
       if (typeof registry?.directory !== 'string' || !registry.directory.trim()) {
         throw new Error('The managed Studio runner did not allocate a private registry directory');
       }
-      sessionEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR = registry.directory;
+      sessionEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR = registry.directory;
     }
     ownedEnvironment = controlEnvironment(sessionEnv, port, authToken);
     control = adapters.createControl(ownedEnvironment);
@@ -445,7 +445,7 @@ export async function openManagedStudioSession(
       launchId,
       processIdentity: launchProcessIdentity,
       env: sessionEnv,
-      managedInstanceRegistryDirectory: sessionEnv.ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR,
+      managedInstanceRegistryDirectory: sessionEnv.LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR,
       studioWorkingDirectory,
       close() {
         if (!closePromise) {

@@ -34,8 +34,8 @@ describe('MCP resource handlers', () => {
           mimeType: 'text/markdown',
         })],
       });
-      await expect(client.readResource({ uri: 'robloxstudio://missing' }))
-        .rejects.toThrow('Resource not found: robloxstudio://missing');
+      await expect(client.readResource({ uri: 'lumen://missing' }))
+        .rejects.toThrow('Resource not found: lumen://missing');
     } finally {
       await client.close();
       await server.close();

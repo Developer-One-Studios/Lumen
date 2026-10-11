@@ -1,4 +1,4 @@
-import { randomBytes, createHash, timingSafeEqual } from 'crypto';
+import { randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { mkdirSync, readFileSync, writeFileSync, linkSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
@@ -14,7 +14,7 @@ import { homedir } from 'os';
 // Resolution order:
 //   1. ROBLOX_STUDIO_NO_AUTH=1|true  -> auth disabled (explicit opt-out)
 //   2. ROBLOX_STUDIO_AUTH_TOKEN      -> use that value
-//   3. ~/.robloxstudio-mcp/auth-token (created on first run, mode 0600)
+//   3. ~/.lumen-mcp/auth-token (created on first run, mode 0600)
 //
 // Every MCP subprocess on the machine resolves the same token, so proxy-mode
 // sessions authenticate to the primary automatically.
@@ -26,7 +26,7 @@ export interface ResolvedAuthToken {
 }
 
 export function authTokenFilePath(): string {
-  return join(homedir(), '.robloxstudio-mcp', 'auth-token');
+  return join(homedir(), '.lumen-mcp', 'auth-token');
 }
 
 const EMPTY_TOKEN_RETRY_MS = 25;
@@ -92,6 +92,11 @@ export function resolveAuthToken(): ResolvedAuthToken {
     );
     return { token: randomBytes(32).toString('hex'), source: 'file' };
   }
+}
+
+/** Proves a listener holds the shared token without revealing the token to one that does not. */
+export function proxyChallengeProof(token: string, nonce: string): string {
+  return createHmac('sha256', token).update(`lumen-mcp-proxy-challenge:${nonce}`).digest('hex');
 }
 
 /** Constant-time token comparison (hashes both sides to hide length). */

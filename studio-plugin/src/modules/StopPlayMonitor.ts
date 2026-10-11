@@ -7,7 +7,7 @@ import PluginSession from "./PluginSession";
 
 const StudioTestService = game.GetService("StudioTestService");
 
-const SETTING_KEY_PREFIX = "MCP_STOP_PLAY_";
+const SETTING_KEY_PREFIX = "LUMEN_STOP_PLAY_";
 const RESULT_KEY_SUFFIX = "_RESULT";
 // Capture before registration yields. Requests from an earlier runtime must
 // never stop a newly created play session, even if clearing settings was lost.
@@ -152,7 +152,7 @@ function handleStopRequest(key: string, request: StopPayload): void {
 	if (lifecycle !== undefined) {
 		const [closeOk, closeError] = pcall(lifecycle.beforeEndTest);
 		if (!closeOk) {
-			warn(`[robloxstudio-mcp] Failed to close the play-server transport before EndTest: ${tostring(closeError)}`);
+			warn(`[lumen-mcp] Failed to close the play-server transport before EndTest: ${tostring(closeError)}`);
 		}
 	}
 	const [endOk, endErr] = pcall(() => StudioTestService.EndTest("stopped_by_mcp"));
@@ -162,7 +162,7 @@ function handleStopRequest(key: string, request: StopPayload): void {
 		if (lifecycle !== undefined) {
 			const [restoreOk, restoreError] = pcall(lifecycle.afterEndTestFailure);
 			if (!restoreOk) {
-				warn(`[robloxstudio-mcp] Failed to restore the play-server transport after EndTest failed: ${tostring(restoreError)}`);
+				warn(`[lumen-mcp] Failed to restore the play-server transport after EndTest failed: ${tostring(restoreError)}`);
 			}
 		}
 	}
@@ -171,7 +171,7 @@ function handleStopRequest(key: string, request: StopPayload): void {
 function startMonitor(lifecycle: StopTransportLifecycle): void {
 	transportLifecycle = lifecycle;
 	if (!pluginRef) {
-		warn("[robloxstudio-mcp] StopPlayMonitor.startMonitor called before init; skipping");
+		warn("[lumen-mcp] StopPlayMonitor.startMonitor called before init; skipping");
 		return;
 	}
 	task.spawn(() => {

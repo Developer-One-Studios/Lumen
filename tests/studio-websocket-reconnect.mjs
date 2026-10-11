@@ -339,12 +339,12 @@ try {
   worker = await createIsolatedStudioDirectory({ prefix: 'native-websocket-reconnect' });
   // The profile wrapper exports/builds once before launch. Never rebuild or
   // overwrite a source/snapshot artifact while Studio is using it.
-  const artifact = path.join(REPO_ROOT, 'studio-plugin', 'MCPPlugin.rbxmx');
+  const artifact = path.join(REPO_ROOT, 'studio-plugin', 'LumenPlugin.rbxmx');
   const runtimeEnv = {
     ...process.env, MCP_PLUGINS_DIR: worker.pluginsDirectory,
     ...worker.environment,
     RSMCP_STUDIO_WORKING_DIRECTORY: worker.workingDirectory,
-    ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
+    LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: worker.managedInstanceRegistryDirectory,
     ROBLOX_STUDIO_PORT: String(portLease.port), RSMCP_AUTO_ASSIGNED_PORT: '0',
   };
   const installer = spawn(process.execPath, [DIST, '--install-bundled-plugin', '--plugin-path', artifact], {
@@ -356,7 +356,7 @@ try {
   } finally {
     if (installer.exitCode === null && installer.signalCode === null) installer.kill('SIGKILL');
   }
-  assert.ok(readFileSync(path.join(worker.pluginsDirectory, 'MCPPlugin.rbxmx'), 'utf8').includes(`http://localhost:${address.port}`));
+  assert.ok(readFileSync(path.join(worker.pluginsDirectory, 'LumenPlugin.rbxmx'), 'utf8').includes(`http://localhost:${address.port}`));
   await portLease.handoff();
   session = await openManagedStudioSession({ port: portLease.port, env: runtimeEnv }, { createControl });
   await verifyTools(['edit']);

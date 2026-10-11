@@ -34,11 +34,11 @@ test('simultaneous first-run processes share one complete persisted token', asyn
     children.forEach((child) => child.send('start'));
     const results = await Promise.all(outcomes);
     await Promise.all(exits);
-    const tokenFile = join(directory, '.robloxstudio-mcp', 'auth-token');
+    const tokenFile = join(directory, '.lumen-mcp', 'auth-token');
     const token = readFileSync(tokenFile, 'utf8').trim();
     expect(token).toMatch(/^[a-f0-9]{64}$/);
     expect(results.every((result) => result.token === token && result.filePath === tokenFile)).toBe(true);
-    expect(readdirSync(join(directory, '.robloxstudio-mcp'))).toEqual(['auth-token']);
+    expect(readdirSync(join(directory, '.lumen-mcp'))).toEqual(['auth-token']);
     if (process.platform !== 'win32') expect(statSync(tokenFile).mode & 0o777).toBe(0o600);
   } finally {
     children.forEach((child) => { if (child.exitCode === null) child.kill(); });
@@ -53,7 +53,7 @@ test.each([
   const directory = mkdtempSync(join(tmpdir(), 'mcp-auth-empty-'));
   const modulePath = join(directory, 'auth.cjs');
   const workerPath = join(directory, 'worker.cjs');
-  const tokenFile = join(directory, '.robloxstudio-mcp', 'auth-token');
+  const tokenFile = join(directory, '.lumen-mcp', 'auth-token');
   const persisted = 'a'.repeat(64);
   writeFileSync(modulePath, ts.transpileModule(readFileSync(join(__dirname, '../auth.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -73,7 +73,7 @@ test.each([
     const { resolveAuthToken } = require('./auth.cjs');
     process.send({ result: resolveAuthToken(), reads }, () => process.disconnect());
   `);
-  mkdirSync(join(directory, '.robloxstudio-mcp'));
+  mkdirSync(join(directory, '.lumen-mcp'));
   writeFileSync(tokenFile, `${persisted}\n`);
   try {
     const child = fork(workerPath, [], {

@@ -1,193 +1,169 @@
-# Roblox Studio MCP
+# Lumen
 
-Connect your coding agent directly to Roblox Studio. It can edit places, run Luau
-in live server and client contexts, start and stop playtests, and collect logs,
-screenshots, memory reports, and profiler captures from each peer.
+**See what your Roblox game is really doing.**
 
-[![NPM Version](https://img.shields.io/npm/v/@chrrxs/robloxstudio-mcp)](https://www.npmjs.com/package/@chrrxs/robloxstudio-mcp)
+Lumen connects AI coding agents such as Claude Code, Codex and Cursor to Roblox Studio.
+Agents can edit places, run Luau on the edit, server and client peers, drive playtests, and read logs, screenshots and profiler data.
+On top of that, Lumen adds tools that answer the questions a game team actually asks while shipping: why does it lag, what leaks, did that sync land, is this jump possible, does the shop button fit on a phone.
 
-## What it can do
+Lumen is a private team build.
+It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.0, keeps all 49 of its tools, and adds 24 more for 73 in total.
 
-### Debug a running game
+## What Lumen adds
 
-- Run Luau with `eval_server_runtime` or `eval_client_runtime`. Both tools execute in a live server or client context and use the same `require` cache as your game scripts.
-- Instrument live code with `breakpoints`. It records each hit without pausing the playtest.
-- Read output from edit mode, the server, or a specific client with `get_runtime_logs`, including messages logged during startup.
+| Area | Tools | What you get |
+| --- | --- | --- |
+| Lag | `perf_stats`, `lag_audit`, `profile_toggle` | Frame, GPU, draw call, physics, network and ping samples per peer, ranked lists of costly content, and before and after numbers with a category switched off. |
+| Leaks | `leak_check` | Repeats an action and reports memory tags, classes, detached instances or values that keep growing. |
+| Playtests | `playtest_scenario`, `wait_for`, `watch` | One call runs keys, clicks, walks, checks and screenshots and returns one report with errors from every peer. |
+| Movement | `navigate_character` | Pathfinding walks that stop within seconds when blocked and name the part in the way. |
+| Safe experiments | `checkpoint` | Snapshot the place, list every change since, and undo it all as one Ctrl+Z step. |
+| Level QA | `spatial_check` | Floating parts, overlaps, buried parts, jump gaps with real jump physics, pathfinding reach and distances. |
+| UI QA | `ui_audit`, `inspect_gui` | Offscreen, clipped, overlapping, tiny or unreadable GUI across phone, tablet and PC presets, plus clicks by GuiObject path. |
+| Screenshots | `capture_views` | Shots from chosen camera positions in edit mode or on playtest clients, held even against game camera scripts. |
+| Rojo | `resolve_source`, `verify_sync` | Studio paths become `file:line`, edits to synced scripts are refused, and each peer is checked against the files on disk. |
+| Errors | `get_errors` | A deduplicated error and warning digest from every peer since the last call. |
+| Networking | `replication_diff`, `fuzz_remotes` | Compare an instance between server and clients, and fire malformed or spammed payloads at remotes. |
+| Tests | `run_tests`, `cloud_luau` | Run the place's test runner in a playtest, or run Luau headlessly on a Roblox cloud server. |
+| Assets | `upload_assets`, `audit_assets`, `datastore_read` | Batch uploads with retries and Sounds created in Studio, a check for assets that fail to load live, and read only DataStore access. |
+| Editing | `multi_edit` | Several edits to one script as one atomic, undoable step. |
 
-### Automate playtests
+Lumen also improves a few upstream tools.
+`execute_luau` and the eval tools cancel code that is still waiting after `timeout_s`, so a `WaitForChild` that never resolves fails fast and names the missing child.
+Script edits match through whitespace differences, `capture_screenshot` can shrink frames and shoot every client, and clicks by path avoid buttons drawn over the target.
+The full reference is in [docs/tools.md](docs/tools.md).
 
-- Start, inspect, and stop solo or multi-client sessions with `solo_playtest` and `multiplayer_playtest`.
-- Open or close Studio windows with `manage_instance`. It can launch a baseplate, a local place file, a published place, or an older place revision.
+## How it compares
 
-### Find performance problems
+Based on each project's tool list in October 2026.
 
-- Record server or client CPU timings with `capture_script_profiler` and `capture_micro_profiler`.
-- Break down memory use with `get_memory_breakdown` or attribute scene cost with `get_scene_analysis`.
+| Capability | Lumen | robloxstudio-mcp 3.2.0 | Official Roblox Studio MCP |
+| --- | --- | --- | --- |
+| Run Luau in edit, server and client | Yes | Yes | Yes |
+| Lag sampling, lag audit and on and off cost tests | Yes | Profilers only | No |
+| Memory leak detection | Yes | No | No |
+| Scripted playtests with one report | Yes | No | No |
+| Checkpoint and one step revert | Yes | No | No |
+| Level checks (floating, overlaps, jump gaps, reach) | Yes | No | No |
+| GUI audit across devices | Yes | Device screenshots | No |
+| Rojo sync checks and `file:line` mapping | Yes | No | No |
+| Replication diff and remote fuzzing | Yes | No | No |
+| Headless cloud Luau | Yes | No | No |
+| Batch asset upload | Audio, models and images | One file at a time | Images |
+| Atomic multi edit | Yes | No | Yes |
+| Character walking | Yes, with stall reports | No | Yes |
+| AI mesh, texture and material generation | No | Model staging | Yes |
+| Roblox subagents | No | No | Yes |
+| Linux with Vinegar | Plugin install, screenshots and launching | Wine launcher | Not supported |
 
-### Work in edit mode
+Lumen runs side by side with the official Roblox Studio MCP.
+It uses its own port, plugin file, toolbar and settings, so it can also sit next to an upstream robloxstudio-mcp install.
 
-- Run Luau in Studio's edit context with `execute_luau`.
-- Use `set_properties` for instance properties and `find_and_replace_in_scripts` for script text. For project-specific bulk edits, use `execute_luau`.
-- For large generated Luau, use the [verified chunk-staging workflow](docs/large-inputs.md): explicit instance routing, UTF-8 byte/hash readback, ownership-checked cleanup, and bounded recovery without blindly replaying mutations.
-- Use `selection` to inspect or update Studio selection and frame a part or model before capturing the viewport.
-- Capture the viewport with `capture_screenshot`, then send mouse or keyboard input. See [Configuration](docs/configuration.md#host-window-capture).
+## Quick start
 
-### Inspect Creator Store assets
+You need Node.js 22 or newer, Git, and Roblox Studio.
+Lumen is not on npm.
+Every teammate builds it from the private [Developer-One-Studios/Lumen](https://github.com/Developer-One-Studios/Lumen) repository.
 
-- Find public assets with `search_assets`, then read the full catalog metadata with `get_asset_details`.
-- Check an asset's hierarchy, media metadata, and security scan with `preview_asset` before adding it to the place.
-- Add an asset with `insert_asset`. The tool removes scripts and package links, verifies the cleaned result, and then parents it in Studio.
-
-### Manage monetization
-
-- List, create, and update developer products and game passes with `manage_monetization`. New items stay off sale unless you ask, and a name that already exists is refused because Roblox cannot delete these items. Requires an Open Cloud API key; see [Configuration](docs/configuration.md#environment-variables).
-
-### Look up Roblox APIs
-
-- Fetch official engine API documentation as Markdown with `get_roblox_docs`.
-- List and retrieve Roblox-authored skills with `get_roblox_skills`.
-
-See the [complete tool list](packages/core/src/tools/definitions.ts).
-
-## Setup
-
-### 1. Connect your client
-
-Choose your MCP client below. Each setup installs the matching Studio plugin automatically.
-
-<details>
-<summary>Codex CLI</summary>
-
-```bash
-codex mcp add robloxstudio -- npx -y @chrrxs/robloxstudio-mcp@latest --auto-install-plugin
+```sh
+git clone git@github.com:Developer-One-Studios/Lumen.git lumen
+cd lumen
+npm ci
+npm ci --prefix studio-plugin
+npm run build
+npm run build:plugin
 ```
 
-</details>
+`npm run build:plugin` compiles the Studio plugin and installs `LumenPlugin.rbxmx` into your Studio Plugins folder.
+Restart Studio afterwards.
+The **Lumen** toolbar button turns green once an agent connects.
 
-<details>
-<summary>Claude Code</summary>
-
-```bash
-claude mcp add robloxstudio -- npx -y @chrrxs/robloxstudio-mcp@latest --auto-install-plugin
-```
-
-</details>
-
-<details>
-<summary>Antigravity CLI</summary>
-
-```bash
-agy mcp add robloxstudio -- npx -y @chrrxs/robloxstudio-mcp@latest --auto-install-plugin
-```
-
-</details>
-
-<details>
-<summary>Other clients (Cursor, Claude Desktop, etc..)</summary>
-
-```json
-{
-  "mcpServers": {
-    "robloxstudio-mcp": {
-      "command": "npx",
-      "args": ["-y", "@chrrxs/robloxstudio-mcp@latest", "--auto-install-plugin"]
-    }
-  }
-}
-```
-
-</details>
-
-### 2. Restart Studio
-
-Fully close and reopen Studio after installation or updates.
-When the plugin displays **Connected**, you're ready.
-
-<details>
-<summary>Advanced setup</summary>
-
-**Custom Plugins folder.** Set `MCP_PLUGINS_DIR` to use a custom location.
-
-**Manual plugin installation.**
-
-```bash
-npx -y @chrrxs/robloxstudio-mcp@latest --install-plugin
-```
-
-Both editions prefer the bundled plugin. If it is missing, installation downloads
-the GitHub release matching the installed npm package version and validates the
-plugin's version and edition before replacing the installed file. This also
-applies to development versions; a missing matching release is an error.
-
-</details>
-
-<details>
-<summary>Native Linux (Wine)</summary>
-
-On native Linux, Studio runs under Wine. To let the server launch and close it,
-set `ROBLOX_STUDIO_WINE_LAUNCHER` to an executable script and `ROBLOX_STUDIO_EXE`
-to `RobloxStudioBeta.exe` inside your Wine prefix. The server runs
-`<launcher> <RobloxStudioBeta.exe path> <Studio arguments...>`; the launcher sets
-up the prefix and display, then must `exec wine "$@"` so Studio keeps its PID.
-See [Native Linux with Wine](docs/configuration.md#native-linux-with-wine).
-
-</details>
-
-## Inspector edition
-
-Read-only access to the DataModel.
-
-[![NPM Version](https://img.shields.io/npm/v/@chrrxs/robloxstudio-mcp-inspector)](https://www.npmjs.com/package/@chrrxs/robloxstudio-mcp-inspector)
-
-<details>
-<summary>Installation and permissions</summary>
-
-No DataModel or script edits. The selection tool can change editor selection and
-camera framing; export and profiler tools can write files only to explicit local
-paths.
-
-Install only one variant at a time (the installers remove the other automatically):
-
-**Codex CLI**
-
-```bash
-codex mcp add robloxstudio-inspector -- npx -y @chrrxs/robloxstudio-mcp-inspector@latest --auto-install-plugin
-```
+Then register Lumen with your agent, using the absolute path of your checkout.
 
 **Claude Code**
 
-```bash
-claude mcp add robloxstudio-inspector -- npx -y @chrrxs/robloxstudio-mcp-inspector@latest --auto-install-plugin
+```sh
+claude mcp add lumen -s user -- node /path/to/lumen/packages/lumen-mcp/dist/index.js --auto-install-plugin
 ```
 
-**Antigravity CLI**
+**Codex**
 
-```bash
-agy mcp add robloxstudio-inspector -- npx -y @chrrxs/robloxstudio-mcp-inspector@latest --auto-install-plugin
+```sh
+codex mcp add lumen -- node /path/to/lumen/packages/lumen-mcp/dist/index.js --auto-install-plugin
 ```
 
-**Other clients (Cursor, Claude Desktop, etc.)**
+**Cursor, Claude Desktop and other clients**
 
 ```json
 {
   "mcpServers": {
-    "robloxstudio-inspector": {
-      "command": "npx",
-      "args": ["-y", "@chrrxs/robloxstudio-mcp-inspector@latest", "--auto-install-plugin"]
+    "lumen": {
+      "command": "node",
+      "args": ["/path/to/lumen/packages/lumen-mcp/dist/index.js", "--auto-install-plugin"]
     }
   }
 }
 ```
 
-</details>
+On Windows use the full path, and double the backslashes inside JSON, for example `C:\\Users\\you\\lumen\\packages\\lumen-mcp\\dist\\index.js`.
+`--auto-install-plugin` refreshes the Studio plugin from your checkout whenever the server starts with a newer build.
+
+Full setup for Windows, macOS and Linux, plus updating and troubleshooting, is in [docs/install.md](docs/install.md).
+
+## Try it
+
+Ask your agent things like:
+
+- "Start a playtest and tell me what costs the most frame time on the client."
+- "Spawn and despawn an enemy 30 times and check whether anything leaks."
+- "Walk the character from the spawn to the boss arena and screenshot each checkpoint."
+- "Checkpoint the place, try the new lighting, show me the changes, then revert."
+- "Audit the main menu on a phone, a tablet and a 1080p PC."
+- "Which platforms on the obby can't be reached with the default jump?"
+- "I edited the dash module but nothing changed in game. Is Rojo syncing?"
+- "Run the place's tests on the published version in the cloud."
+
+## Editions
+
+| Edition | Package | Plugin | Use it for |
+| --- | --- | --- | --- |
+| Lumen | `packages/lumen-mcp` | `LumenPlugin.rbxmx` | Everything: editing, playtests, profiling and QA. |
+| Lumen Inspector | `packages/lumen-mcp-inspector` | `LumenInspectorPlugin.rbxmx` | Read only access through 27 tools that cannot change the DataModel or scripts. |
+
+Install one edition at a time, since each installer removes the other plugin.
+The Inspector is built with `npm run build:plugin:inspector` and registered with `packages/lumen-mcp-inspector/dist/index.js`.
+
+## Configuration
+
+Most teams only need these:
+
+| Variable | Purpose |
+| --- | --- |
+| `ROBLOX_OPEN_CLOUD_API_KEY` | Open Cloud key for `cloud_luau`, `upload_assets`, `datastore_read` and the monetization tools. |
+| `ROBLOX_CREATOR_GROUP_ID` | Group that uploads belong to when no `group_id` is passed. |
+| `ROBLOX_STUDIO_PORT` | Bridge port, `58761` by default. |
+| `ROBLOX_SOURCEMAP` | Rojo `sourcemap.json` to use when none is found above the working directory. |
+| `ROBLOX_MCP_ARTIFACT_DIR` | Keeps every file Lumen writes, such as screenshots, exports and manifests, inside one folder. |
+
+Set the key in your environment rather than with `--open-cloud-key`, which would store it in your agent's configuration file.
+Every variable is listed in [docs/configuration.md](docs/configuration.md).
+
+## Security
+
+Lumen keeps upstream's local bridge with token authentication and hardens several paths around it.
+Playtest clients only run requests the server peer issued through single use tickets, so game scripts cannot borrow plugin level Luau.
+Proxy instances check that the primary holds the token before sending it, launch overrides need an explicit opt in, and file writes can be confined to one folder.
+Details and how to report a problem are in [SECURITY.md](SECURITY.md).
 
 ## Documentation
 
 | Topic | Guides |
 | --- | --- |
-| **Setup & usage** | [Configuration and HTTP bridge](docs/configuration.md) · [Large inputs & recovery](docs/large-inputs.md) · [Creator Store assets](docs/creator-store-assets.md) |
-| **Development** | [Building from source](docs/building-from-source.md) · [API migration](docs/deprecated-api.md) · [Token budgets](docs/token-efficiency.md) |
+| Using Lumen | [Install](docs/install.md) · [Tool reference](docs/tools.md) · [Configuration](docs/configuration.md) · [Large inputs](docs/large-inputs.md) · [Creator Store assets](docs/creator-store-assets.md) |
+| Working on Lumen | [Development](docs/development.md) · [Building from source](docs/building-from-source.md) · [Token budgets](docs/token-efficiency.md) · [API migration](docs/deprecated-api.md) |
+| History | [Lumen releases](docs/releases.md) · [Upstream changelog](CHANGELOG.md) |
 
----
+## License
 
-[Report issues](https://github.com/chrrxs/robloxstudio-mcp/issues) · [Report a security vulnerability](SECURITY.md) · MIT Licensed · Based on [boshyxd/robloxstudio-mcp](https://github.com/boshyxd/robloxstudio-mcp) v2.7.0
+Lumen is MIT licensed.
+[LICENSE](LICENSE) also carries the notice of robloxstudio-mcp, the project Lumen is forked from.

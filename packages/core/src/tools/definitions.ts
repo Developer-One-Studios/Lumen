@@ -1,5 +1,7 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/server';
 import { MAX_PNG_BASE64_CHARACTERS } from '../image-decode.js';
+import { FORK_TOOL_DEFINITIONS } from './fork-definitions.js';
+import { FORK_FEATURES } from './fork/index.js';
 
 export type ToolCategory = 'read' | 'write';
 
@@ -367,6 +369,12 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         instance_id: {
           type: 'string',
           description: 'Studio process ID when ambiguous.'
+        },
+        timeout_s: {
+          type: 'number',
+          minimum: 1,
+          maximum: 300,
+          description: 'Cancel the code if it still yields after this, default 25.'
         }
       },
       required: ['code']
@@ -386,6 +394,12 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         instance_id: {
           type: 'string',
           description: 'Studio process ID when ambiguous.'
+        },
+        timeout_s: {
+          type: 'number',
+          minimum: 1,
+          maximum: 300,
+          description: 'Cancel the code if it still yields after this, default 25.'
         }
       },
       required: ['code']
@@ -409,6 +423,12 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         instance_id: {
           type: 'string',
           description: 'Studio process ID when ambiguous.'
+        },
+        timeout_s: {
+          type: 'number',
+          minimum: 1,
+          maximum: 300,
+          description: 'Cancel the code if it still yields after this, default 25.'
         }
       },
       required: ['code']
@@ -1368,7 +1388,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         name: {
           type: 'string',
-          description: 'Generated Model name in __MCPGeneratedModels.'
+          description: 'Generated Model name in __LumenGeneratedModels.'
         },
         size: {
           type: 'object',
@@ -1482,7 +1502,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'capture_screenshot',
     category: 'read',
-    description: 'Use to capture the Studio viewport or map input coordinates.',
+    description: 'Use to capture the Studio viewport or each playtest client window, or to map input coordinates.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1494,6 +1514,18 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         quality: {
           type: 'number',
           description: 'JPEG quality 1-100; defaults to 92. Ignored for png.'
+        },
+        max_width: {
+          type: 'integer',
+          minimum: 64,
+          description: 'Downscale frames wider than this, keeping the aspect ratio.'
+        },
+        clients: {
+          anyOf: [
+            { type: 'string', enum: ['all'] },
+            { type: 'array', items: { type: 'string' } }
+          ],
+          description: '"all" or client roles or instance ids, one image per client.'
         },
         instance_id: {
           type: 'string',
@@ -1574,7 +1606,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'simulate_mouse_input',
     category: 'write',
-    description: 'Use to click the live playtest viewport at known pixel coordinates.',
+    description: 'Use to click the live playtest viewport at pixel coordinates or on a GuiObject by path.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1591,6 +1623,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'number',
           description: 'Viewport pixel Y coordinate.'
         },
+        instance_path: {
+          type: 'string',
+          description: 'GuiObject to click on a point nothing covers, not x and y.'
+        },
         button: {
           type: 'string',
           enum: ['Left', 'Right', 'Middle'],
@@ -1605,7 +1641,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           description: 'Studio process ID when ambiguous.'
         }
       },
-      required: ['action', 'x', 'y']
+      required: ['action']
     }
   },
   {
@@ -1868,6 +1904,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ['name']
     }
   },
+  ...FORK_TOOL_DEFINITIONS,
+  ...FORK_FEATURES.flatMap((feature) => feature.definitions),
 ];
 
 export const getReadOnlyTools = () => TOOL_DEFINITIONS.filter(t => t.category === 'read');

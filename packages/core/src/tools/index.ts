@@ -26,6 +26,7 @@ import { findBuiltInStudioSkill, loadBuiltInStudioSkills } from '../studio-skill
 import { runManageMonetization } from './monetization.js';
 import { rgbaToJpeg } from '../jpeg-encoder.js';
 import { rgbaToPng } from '../png-encoder.js';
+import { downscaleRgba, fitWidth, type RgbaFrame } from '../image-resize.js';
 import {
   captureStudioWindow,
   cropToViewport,
@@ -39,6 +40,8 @@ import {
 import type { HostCaptureResult, HostWindowIdentity, ViewportRect } from '../host-capture.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { resolveArtifactReadPath, writeArtifact } from '../artifact-paths.js';
+import { ForkTools, cameraViews, type CameraView, type ForkHost, type PeerTarget } from './fork-tools.js';
 
 type RawImageCaptureResponse = {
   success?: boolean;
@@ -111,11 +114,25 @@ type EncodedViewportCapture = {
   message: string;
   source?: string;
   studioFastPathUnavailable?: string;
+  originalWidth: number;
+  originalHeight: number;
+  /** Viewport pixels per image pixel, present when the image is smaller than the viewport. */
+  scale?: { x: number; y: number };
 } | {
   success: false;
   error: string;
   studioFastPathUnavailable?: string;
 };
+
+// capture_screenshot and capture_views arguments beyond routing and format, validated by captureScreenshot.
+type ScreenshotOptions = {
+  max_width?: unknown;
+  views?: unknown;
+  clients?: unknown;
+};
+
+/** A viewport to capture. Client and alias are set for playtest clients. */
+type ScreenshotTarget = { instanceId: string; role: string; client?: string; alias?: string };
 
 type DeviceSimulatorSettings = {
   deviceId?: string;
@@ -154,6 +171,7 @@ type StudioToolResponse = Record<string, unknown> & {
 
 const MAX_INLINE_IMAGE_BYTES = 6_000_000;
 const MAX_MATRIX_IMAGE_BYTES = 8_000_000;
+const MAX_SCREENSHOTS_PER_CALL = 12;
 const DEFAULT_ASSET_AUDIO_PREVIEWS = 3;
 const MAX_ASSET_AUDIO_PREVIEWS = 5;
 const MAX_INLINE_AUDIO_PREVIEW_BYTES = 3_000_000;
@@ -162,6 +180,14 @@ const DEFAULT_ASSET_PREVIEW_DEPTH = 4;
 const MAX_ASSET_PREVIEW_HIERARCHY_NODES = 100;
 const MAX_SEARCH_ASSET_DESCRIPTION_LENGTH = 240;
 const ROBLOX_CREATOR_USER_ID = 1;
+
+// The plugin cancels Luau still yielding at this deadline, so a WaitForChild that never resolves fails fast with a reason.
+const DEFAULT_LUAU_DEADLINE_S = 25;
+
+function luauDeadline(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(300, Math.max(1, value)) : DEFAULT_LUAU_DEADLINE_S;
+}
+
 const MAX_DEVICE_MATRIX_ENTRIES = 6;
 const MAX_NETWORK_PACKET_LOSS_PERCENT = 0.5;
 const GREP_SCRIPTS_TIMEOUT_MS = 120_000;
@@ -242,22 +268,29 @@ function normalizeSearchAssetDescription(description: string | undefined): strin
 // - 'jpeg': default; quality 92 with 4:4:4 chroma (no subsampling) keeps text
 //   crisp at ~1/3 the size. The image rides back inline as an MCP tool result,
 //   so JPEG is the safe default for staying under client result-size caps.
-function encodeImageFromRgbaResponse(
-  response: RawImageCaptureResponse,
+function encodeRgbaFrame(
+  frame: RgbaFrame,
   format: 'jpeg' | 'png',
   quality: number,
 ): { buffer: Buffer; mimeType: string } {
+  if (format === 'png') {
+    return { buffer: rgbaToPng(frame.rgba, frame.width, frame.height), mimeType: 'image/png' };
+  }
+  return {
+    buffer: rgbaToJpeg(frame.rgba, frame.width, frame.height, quality),
+    mimeType: 'image/jpeg',
+  };
+}
+
+// Shrinking before encoding keeps the whole frame in view while cutting the inline payload.
+function rgbaFrameFromResponse(response: RawImageCaptureResponse, maxWidth?: number): RgbaFrame {
   if (!response.data || response.width === undefined || response.height === undefined) {
     throw new Error('Render response missing data, width, or height');
   }
-  const rgbaBuffer = Buffer.from(response.data, 'base64');
-  if (format === 'png') {
-    return { buffer: rgbaToPng(rgbaBuffer, response.width, response.height), mimeType: 'image/png' };
-  }
-  return {
-    buffer: rgbaToJpeg(rgbaBuffer, response.width, response.height, quality),
-    mimeType: 'image/jpeg',
-  };
+  const frame = { width: response.width, height: response.height, rgba: Buffer.from(response.data, 'base64') };
+  if (maxWidth === undefined) return frame;
+  const size = fitWidth(frame.width, frame.height, maxWidth);
+  return downscaleRgba(frame, size.width, size.height);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -443,7 +476,7 @@ function loadMicroProfilerBaseline(source: unknown, sourcePath: unknown): Record
     if (typeof sourcePath !== 'string' || sourcePath === '') {
       throw new Error('baseline_path must be a non-empty string when provided');
     }
-    const resolved = path.resolve(sourcePath);
+    const resolved = resolveArtifactReadPath(sourcePath);
     const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8')) as unknown;
     const record = asRecord(parsed);
     if (!record) throw new Error(`baseline_path did not contain a JSON object: ${resolved}`);
@@ -1033,6 +1066,9 @@ export class RobloxStudioTools {
   private hostWindowCapture: HostWindowCaptureFn = captureStudioWindow;
   private hostViewportRects = new Map<string, HostViewportRectCacheEntry>();
   private viewportCaptureQueues = new Map<string, Promise<void>>();
+  readonly fork: ForkTools;
+  // Peer routing for the fork's feature modules, which live outside this class.
+  readonly forkHost: ForkHost;
 
   constructor(bridge: BridgeService) {
     this.client = new StudioHttpClient(bridge);
@@ -1040,6 +1076,13 @@ export class RobloxStudioTools {
     this.openCloudClient = new OpenCloudClient();
     this.cookieClient = new RobloxCookieClient();
     this.instanceManager = new StudioInstanceManager();
+    this.forkHost = {
+      peerTargets: (target, instanceId) => this._peerTargets(target, instanceId),
+      requestPeer: (endpoint, data, peerId, timeoutMs) => this._requestPeer(endpoint, data, peerId, timeoutMs),
+      soloPlaytest: (action, mode, timeout, instanceId) => this.soloPlaytest(action, mode, timeout, instanceId),
+      getRuntimeLogs: (instanceId, cursor) => this.getRuntimeLogs(instanceId, undefined, cursor),
+    };
+    this.fork = new ForkTools(this.forkHost);
     this.unsubscribePeerRegistered = this.bridge.onPeerRegistered((peer) => {
       const instanceManager = this.instanceManager;
       const association = this.managedConnectionAssociations.then(() =>
@@ -1047,7 +1090,7 @@ export class RobloxStudioTools {
       );
       this.managedConnectionAssociations = association.catch((error) => {
         console.warn(
-          `[robloxstudio-mcp] managed Studio connection association failed: ${error instanceof Error ? error.message : String(error)}`,
+          `[lumen-mcp] managed Studio connection association failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       });
     });
@@ -1055,6 +1098,15 @@ export class RobloxStudioTools {
 
   getStudioLifecycleCapabilities() {
     return this.instanceManager.getLifecycleCapabilities();
+  }
+
+  private async _peerTargets(target: string | undefined, instance_id: string | undefined): Promise<PeerTarget[]> {
+    const refresh = this.bridge.refreshTopologyForRouting();
+    if (refresh) await refresh;
+    const resolved = this.bridge.resolveTarget({ instance_id, target });
+    if (!resolved.ok) throw new RoutingFailure(resolved.error);
+    if (resolved.mode === 'single') return [{ role: resolved.targetRole, peerId: resolved.targetPeerId }];
+    return resolved.targets.map((peer) => ({ role: peer.targetRole, peerId: peer.targetPeerId }));
   }
 
   async dispose(): Promise<void> {
@@ -2005,11 +2057,12 @@ export class RobloxStudioTools {
     };
   }
 
-  async executeLuau(code: string, target?: string, instance_id?: string, operation_id?: string) {
+  async executeLuau(code: string, target?: string, instance_id?: string, operation_id?: string, timeout_s?: unknown) {
     if (!code) {
       throw new Error('Code is required for execute_luau');
     }
-    const response = await this._callSingle('/api/execute-luau', { code }, target || 'edit', instance_id, undefined, undefined, operation_id);
+    const deadline = luauDeadline(timeout_s);
+    const response = await this._callSingle('/api/execute-luau', { code, timeout_s: deadline }, target || 'edit', instance_id, (deadline + 5) * 1000, undefined, operation_id);
     return {
       content: [
         {
@@ -2020,11 +2073,12 @@ export class RobloxStudioTools {
     };
   }
 
-  async evalServerRuntime(code: string, instance_id?: string) {
+  async evalServerRuntime(code: string, instance_id?: string, timeout_s?: unknown) {
     if (!code) {
       throw new Error('Code is required for eval_server_runtime');
     }
-    const response = await this._callSingle('/api/eval-runtime', { code }, 'server', instance_id);
+    const deadline = luauDeadline(timeout_s);
+    const response = await this._callSingle('/api/eval-runtime', { code, timeout_s: deadline }, 'server', instance_id, (deadline + 5) * 1000);
     return {
       content: [
         {
@@ -2035,7 +2089,7 @@ export class RobloxStudioTools {
     };
   }
 
-  async evalClientRuntime(code: string, target?: string, instance_id?: string) {
+  async evalClientRuntime(code: string, target?: string, instance_id?: string, timeout_s?: unknown) {
     if (!code) {
       throw new Error('Code is required for eval_client_runtime');
     }
@@ -2043,7 +2097,8 @@ export class RobloxStudioTools {
     if (!clientTarget.startsWith('client-')) {
       throw new Error(`eval_client_runtime requires target=client-N (got: ${clientTarget})`);
     }
-    const response = await this._callSingle('/api/eval-runtime', { code }, clientTarget, instance_id);
+    const deadline = luauDeadline(timeout_s);
+    const response = await this._callSingle('/api/eval-runtime', { code, timeout_s: deadline }, clientTarget, instance_id, (deadline + 5) * 1000);
     return {
       content: [
         {
@@ -2882,10 +2937,7 @@ export class RobloxStudioTools {
       const rawJson = mutable.raw_json;
       if (typeof rawJson === 'string') {
         if (typeof outputPath === 'string' && outputPath !== '') {
-          const resolvedOutputPath = path.resolve(outputPath);
-          fs.mkdirSync(path.dirname(resolvedOutputPath), { recursive: true });
-          fs.writeFileSync(resolvedOutputPath, rawJson, 'utf8');
-          mutable.output_path = resolvedOutputPath;
+          mutable.output_path = writeArtifact(outputPath, rawJson);
         }
         delete mutable.raw_json;
       }
@@ -2956,10 +3008,7 @@ export class RobloxStudioTools {
       const rawSnapshotBase64 = mutable.raw_snapshot_base64;
       if (typeof rawSnapshotBase64 === 'string') {
         if (typeof outputPath === 'string' && outputPath !== '') {
-          const resolvedOutputPath = path.resolve(outputPath);
-          fs.mkdirSync(path.dirname(resolvedOutputPath), { recursive: true });
-          fs.writeFileSync(resolvedOutputPath, Buffer.from(rawSnapshotBase64, 'base64'));
-          mutable.output_path = resolvedOutputPath;
+          mutable.output_path = writeArtifact(outputPath, Buffer.from(rawSnapshotBase64, 'base64'));
         }
         delete mutable.raw_snapshot_base64;
       }
@@ -2974,10 +3023,7 @@ export class RobloxStudioTools {
       }
 
       if (typeof summaryOutputPath === 'string' && summaryOutputPath !== '') {
-        const resolvedSummaryPath = path.resolve(summaryOutputPath);
-        fs.mkdirSync(path.dirname(resolvedSummaryPath), { recursive: true });
-        fs.writeFileSync(resolvedSummaryPath, JSON.stringify(mutable, null, 2), 'utf8');
-        mutable.summary_output_path = resolvedSummaryPath;
+        mutable.summary_output_path = writeArtifact(summaryOutputPath, JSON.stringify(mutable, null, 2));
       }
 
       if (!includeComparisonIndex) {
@@ -3365,7 +3411,16 @@ export class RobloxStudioTools {
     }
     const processEnvironment = parseStudioProcessEnvironmentPatch(request.process_environment);
     const studioWorkingDirectory = parseStudioWorkingDirectory(request.studio_working_directory);
-
+    // A tool call that picks the executable, its environment or its working directory can run anything as the user.
+    if (
+      (studioExecutable !== undefined || processEnvironment !== undefined || studioWorkingDirectory !== undefined)
+      && process.env.ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES !== '1'
+    ) {
+      throw new Error(
+        'studio_executable, process_environment and studio_working_directory are disabled; ' +
+        'start the server with ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES=1 to allow them.',
+      );
+    }
 
     const universeId = launchSource === 'published_place' || launchSource === 'place_revision'
       ? await this._deriveUniverseId(placeId as number)
@@ -4588,14 +4643,19 @@ export class RobloxStudioTools {
       result:Destroy()
       return id
     `;
-    try {
-      const response = await this._callSingle('/api/execute-luau', { code }, 'edit', instance_id) as { returnValue?: unknown };
-      const returnValue = response?.returnValue;
-      if (returnValue !== undefined && returnValue !== null && /^\d+$/.test(String(returnValue))) {
-        return String(returnValue);
+    // A freshly uploaded image can take a few seconds to become loadable, so an empty answer is retried.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        const response = await this._callSingle('/api/execute-luau', { code }, 'edit', instance_id) as { returnValue?: unknown };
+        const returnValue = response?.returnValue;
+        if (returnValue !== undefined && returnValue !== null && /^\d+$/.test(String(returnValue))) {
+          return String(returnValue);
+        }
+      } catch {
+        // Without a connected Studio no attempt can succeed.
+        return null;
       }
-    } catch {
-      // plugin not connected or luau execution failed
     }
     return null;
   }
@@ -4959,12 +5019,11 @@ export class RobloxStudioTools {
     }
 
     const bytes = Buffer.from(response.base64, 'base64');
-    const resolved = path.resolve(outputPath);
+    let resolved: string;
     try {
-      fs.mkdirSync(path.dirname(resolved), { recursive: true });
-      fs.writeFileSync(resolved, bytes);
+      resolved = writeArtifact(outputPath, bytes);
     } catch (err) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: `failed to write ${resolved}: ${(err as Error).message}` }) }] };
+      return { content: [{ type: 'text', text: JSON.stringify({ error: `failed to write ${outputPath}: ${(err as Error).message}` }) }] };
     }
 
     return {
@@ -5034,9 +5093,10 @@ export class RobloxStudioTools {
     format?: string,
     quality?: number,
     maxBytes: number = MAX_INLINE_IMAGE_BYTES,
+    maxWidth?: number,
   ): Promise<EncodedViewportCapture> {
     const previous = this.viewportCaptureQueues.get(instanceId) ?? Promise.resolve();
-    const capture = previous.then(() => this._captureViewportImageNow(instanceId, targetRole, format, quality, maxBytes));
+    const capture = previous.then(() => this._captureViewportImageNow(instanceId, targetRole, format, quality, maxBytes, maxWidth));
     const settled = capture.then(() => undefined, () => undefined);
     this.viewportCaptureQueues.set(instanceId, settled);
     try {
@@ -5052,6 +5112,7 @@ export class RobloxStudioTools {
     format?: string,
     quality?: number,
     maxBytes: number = MAX_INLINE_IMAGE_BYTES,
+    maxWidth?: number,
   ): Promise<EncodedViewportCapture> {
     const fmt: 'jpeg' | 'png' = format === 'png' ? 'png' : 'jpeg';
     const q = quality === undefined ? 92 : Math.max(1, Math.min(100, Math.floor(quality)));
@@ -5068,9 +5129,10 @@ export class RobloxStudioTools {
     // after the playtest stops), while the same call in the play client peer
     // completes. So the request follows targetRole, which is already the
     // rendering peer: 'edit' when idle, 'client-N' during a playtest.
+    // max_width needs raw pixels to resize, so Studio's PNG encoding is skipped then.
     let response = await this._callSingle(
       '/api/capture-studio',
-      { encoding: fmt === 'png' ? 'png' : 'rgba8' },
+      { encoding: fmt === 'png' && maxWidth === undefined ? 'png' : 'rgba8' },
       targetRole,
       instanceId,
     ) as RawImageCaptureResponse;
@@ -5091,7 +5153,18 @@ export class RobloxStudioTools {
         // the client to get the rbxtemp:// id, then read it back in the edit DM —
         // the rbxtemp handle is process-scoped and the edit/plugin identity is
         // allowed to promote it into a readable EditableImage.
-        const begin = await this._callSingle('/api/capture-begin', {}, targetRole, instanceId) as { contentId?: string; error?: string };
+        // A multiplayer client is its own Studio process without an edit DataModel. Its rbxtemp id read in the
+        // controller's edit DataModel names an unrelated texture there, so that read would return a wrong image.
+        const clientPeer = this._peerForRoleInScope(instanceId, targetRole);
+        const sameProcessEdit = clientPeer !== undefined && this.bridge.getPeersInScope(instanceId)
+          .some((peer) => peer.role === 'edit' && peer.instanceId === clientPeer.instanceId);
+        const begin = sameProcessEdit
+          ? await this._callSingle('/api/capture-begin', {}, targetRole, instanceId) as { contentId?: string; error?: string }
+          : {
+            error: `${targetRole} runs in its own Studio process, where CaptureService images cannot be read back, `
+              + `and Studio's direct capture is unavailable (${studioFastPathUnavailable ?? 'no reason given'}). `
+              + 'Capture it in a solo playtest, or enable host capture.',
+          };
         if (begin.error) {
           response = { error: begin.error };
         } else if (!begin.contentId) {
@@ -5167,6 +5240,7 @@ export class RobloxStudioTools {
     // succeeds.
     let buffer: Buffer;
     let mimeType: string;
+    let frame: RgbaFrame | undefined;
     if (response.encoding === 'png') {
       // StudioCaptureService already encoded the PNG in Studio.
       if (!response.data) {
@@ -5175,7 +5249,8 @@ export class RobloxStudioTools {
       buffer = Buffer.from(response.data, 'base64');
       mimeType = 'image/png';
     } else {
-      const encoded = encodeImageFromRgbaResponse(response, fmt, q);
+      frame = rgbaFrameFromResponse(response, maxWidth);
+      const encoded = encodeRgbaFrame(frame, fmt, q);
       buffer = encoded.buffer;
       mimeType = encoded.mimeType;
     }
@@ -5183,7 +5258,7 @@ export class RobloxStudioTools {
     let note = '';
 
     if (buffer.length > maxBytes) {
-      if (fmt === 'png') {
+      if (fmt === 'png' || frame === undefined) {
         const mb = (buffer.length / 1048576).toFixed(1);
         return {
           success: false,
@@ -5194,7 +5269,7 @@ export class RobloxStudioTools {
       }
       while (buffer.length > maxBytes && usedQ > 25) {
         usedQ = Math.max(25, usedQ - 20);
-        buffer = encodeImageFromRgbaResponse(response, 'jpeg', usedQ).buffer;
+        buffer = encodeRgbaFrame(frame, 'jpeg', usedQ).buffer;
       }
       if (buffer.length > maxBytes) {
         return {
@@ -5210,24 +5285,28 @@ export class RobloxStudioTools {
     // Explicit coordinate contract: the image is returned at native viewport
     // resolution whenever it fits the transport cap, so its pixel grid IS the
     // coordinate space simulate_mouse_input expects. Oversized captures are
-    // downscaled in Studio before transfer; the message then tells the caller
-    // how to map image coordinates back to viewport coordinates.
+    // downscaled in Studio before transfer, and max_width shrinks them here.
+    // The message then tells the caller how to map image coordinates back to
+    // viewport coordinates.
+    const outW = frame?.width ?? w;
+    const outH = frame?.height ?? h;
     const nativeW = response.nativeWidth ?? w;
     const nativeH = response.nativeHeight ?? h;
+    const downscaled = nativeW !== outW || nativeH !== outH;
     const message =
-      (nativeW !== w || nativeH !== h
-        ? `Screenshot ${w}x${h}px (${fmt}${fmt === 'jpeg' ? ` q${usedQ}` : ''})${note}, downscaled from the ` +
-          `${nativeW}x${nativeH} viewport to fit transport limits. For simulate_mouse_input, multiply x read off ` +
-          `this image by ${(nativeW / w).toFixed(4)} and y by ${(nativeH / h).toFixed(4)} to get viewport pixel ` +
-          `coordinates ((0,0) at the top-left).`
-        : `Screenshot ${w}x${h}px (${fmt}${fmt === 'jpeg' ? ` q${usedQ}` : ''})${note}. ` +
+      (downscaled
+        ? `Screenshot ${outW}x${outH}px (${fmt}${fmt === 'jpeg' ? ` q${usedQ}` : ''})${note}, downscaled from the ` +
+          `${nativeW}x${nativeH} viewport ${outW !== w ? `to max_width ${maxWidth}` : 'to fit transport limits'}. ` +
+          `For simulate_mouse_input, multiply x read off this image by ${(nativeW / outW).toFixed(4)} and y by ` +
+          `${(nativeH / outH).toFixed(4)} to get original viewport pixel coordinates ((0,0) at the top-left).`
+        : `Screenshot ${outW}x${outH}px (${fmt}${fmt === 'jpeg' ? ` q${usedQ}` : ''})${note}. ` +
           `For simulate_mouse_input, x/y are pixel coordinates in this exact image with (0,0) at the ` +
           `top-left; it is not downscaled, so use coordinates as you read them off the image.`) + hostNote;
 
     return {
       success: true,
-      width: w,
-      height: h,
+      width: outW,
+      height: outH,
       format: fmt,
       quality: fmt === 'jpeg' ? usedQ : undefined,
       note,
@@ -5236,6 +5315,11 @@ export class RobloxStudioTools {
       message,
       source: response.source,
       studioFastPathUnavailable,
+      originalWidth: nativeW,
+      originalHeight: nativeH,
+      ...(downscaled
+        ? { scale: { x: Math.round((nativeW / outW) * 10_000) / 10_000, y: Math.round((nativeH / outH) * 10_000) / 10_000 } }
+        : {}),
     };
   }
 
@@ -5435,11 +5519,24 @@ export class RobloxStudioTools {
     };
   }
 
-  async captureScreenshot(instance_id?: string, format?: string, quality?: number) {
+  /**
+   * Captures the viewport input tools target: a playtest client's, else the edit viewport.
+   * views move the camera of that rendering peer, so callers that pass them serialize through fork.serializeCapture.
+   */
+  async captureScreenshot(instance_id?: string, format?: string, quality?: number, options: ScreenshotOptions = {}) {
+    if (options.max_width !== undefined && (typeof options.max_width !== 'number' || !Number.isFinite(options.max_width) || options.max_width < 64)) {
+      throw new Error('max_width must be a number of at least 64');
+    }
+    const maxWidth = options.max_width === undefined ? undefined : Math.round(options.max_width);
+    const views = options.views === undefined ? undefined : cameraViews(options.views);
     const refresh = this.bridge.refreshTopologyForRouting();
     if (refresh) await refresh;
+    if (views !== undefined || options.clients !== undefined) {
+      return this._captureScreenshotSet(instance_id, format, quality, maxWidth, views, options.clients);
+    }
+
     const { instanceId, clientRole } = this._resolveRuntime(instance_id);
-    const capture = await this._captureViewportImage(instanceId, clientRole ?? 'edit', format, quality);
+    const capture = await this._captureViewportImage(instanceId, clientRole ?? 'edit', format, quality, MAX_INLINE_IMAGE_BYTES, maxWidth);
     if (!capture.success) {
       return this._textResult({ error: capture.error, studioFastPathUnavailable: capture.studioFastPathUnavailable });
     }
@@ -5448,16 +5545,7 @@ export class RobloxStudioTools {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            width: capture.width,
-            height: capture.height,
-            format: capture.format,
-            mimeType: capture.mimeType,
-            ...(capture.quality === undefined ? {} : { quality: capture.quality }),
-            message: capture.message,
-            source: capture.source,
-            studioFastPathUnavailable: capture.studioFastPathUnavailable,
-          }),
+          text: JSON.stringify(this._screenshotFields(capture)),
         },
         {
           type: 'image',
@@ -5466,5 +5554,140 @@ export class RobloxStudioTools {
         },
       ],
     };
+  }
+
+  private _screenshotFields(capture: Extract<EncodedViewportCapture, { success: true }>) {
+    return {
+      width: capture.width,
+      height: capture.height,
+      originalWidth: capture.originalWidth,
+      originalHeight: capture.originalHeight,
+      ...(capture.scale === undefined ? {} : { scale: capture.scale }),
+      format: capture.format,
+      mimeType: capture.mimeType,
+      ...(capture.quality === undefined ? {} : { quality: capture.quality }),
+      message: capture.message,
+      source: capture.source,
+      studioFastPathUnavailable: capture.studioFastPathUnavailable,
+    };
+  }
+
+  private _capturePeer(instanceId: string, role: string): PeerTarget {
+    const peer = this._peerForRoleInScope(instanceId, role);
+    if (!peer) {
+      throw new RoutingFailure({
+        code: 'target_role_not_present_on_instance',
+        message: `Routing scope for instance "${instanceId}" has no role "${role}".`,
+        data: this._routingErrorData(),
+      });
+    }
+    return { role: peer.role, peerId: peer.peerId };
+  }
+
+  // Input tools reach a grouped multiplayer client through its role-suffixed id, a solo client through the process id.
+  private _screenshotTarget(peer: { instanceId: string; role: string; multiplayerGroupId?: string }): ScreenshotTarget {
+    if (!/^client-\d+$/.test(peer.role)) return { instanceId: peer.instanceId, role: peer.role };
+    const alias = peer.multiplayerGroupId === undefined ? peer.instanceId : `${peer.instanceId}-${peer.role}`;
+    return { instanceId: peer.instanceId, role: peer.role, client: peer.role, alias };
+  }
+
+  // A multiplayer playtest runs one Studio window per client, so each client is captured from its own process.
+  private _screenshotClients(instance_id: string | undefined, clients: unknown): ScreenshotTarget[] {
+    const scope = this._resolveRuntime(instance_id).instanceId;
+    const clientNumber = (role: string) => Number(role.slice('client-'.length));
+    const available = this.bridge.getPeersInScope(scope)
+      .filter((peer) => /^client-\d+$/.test(peer.role))
+      .sort((a, b) => clientNumber(a.role) - clientNumber(b.role) || a.peerId.localeCompare(b.peerId));
+    if (available.length === 0) {
+      throw new Error('clients needs a running playtest client. Start a playtest or omit clients.');
+    }
+    if (clients === 'all' || (Array.isArray(clients) && clients.includes('all'))) {
+      return available.map((peer) => this._screenshotTarget(peer));
+    }
+    if (!Array.isArray(clients) || clients.length === 0 || !clients.every((entry) => typeof entry === 'string')) {
+      throw new Error('clients must be "all" or a non-empty array of client roles or instance ids');
+    }
+    const chosen = new Map<string, (typeof available)[number]>();
+    for (const wanted of clients as string[]) {
+      const matches = available.filter((peer) =>
+        wanted === peer.role || wanted === peer.instanceId || wanted === `${peer.instanceId}-${peer.role}`);
+      if (matches.length !== 1) {
+        const connected = available.map((peer) => `${peer.role} (${this._screenshotTarget(peer).alias})`).join(', ');
+        throw new Error(`clients entry "${wanted}" ${matches.length === 0 ? 'is not a connected client' : 'matches several clients'}. Connected: ${connected}.`);
+      }
+      chosen.set(matches[0].peerId, matches[0]);
+    }
+    return [...chosen.values()].map((peer) => this._screenshotTarget(peer));
+  }
+
+  // Every target is shot from every view in order, and each target's camera is restored once after its last view.
+  private async _captureScreenshotSet(
+    instance_id: string | undefined,
+    format: string | undefined,
+    quality: number | undefined,
+    maxWidth: number | undefined,
+    views: CameraView[] | undefined,
+    clients: unknown,
+  ) {
+    let targets: ScreenshotTarget[];
+    if (clients === undefined) {
+      const { instanceId, clientRole } = this._resolveRuntime(instance_id);
+      const client = clientRole === undefined ? undefined : this._peerForRoleInScope(instanceId, clientRole);
+      targets = [client ? this._screenshotTarget(client) : { instanceId, role: 'edit' }];
+    } else {
+      targets = this._screenshotClients(instance_id, clients);
+    }
+    const perTarget = views?.length ?? 1;
+    const total = targets.length * perTarget;
+    if (total > MAX_SCREENSHOTS_PER_CALL) {
+      throw new Error(
+        `${targets.length} client(s) x ${perTarget} view(s) is ${total} images, over the ${MAX_SCREENSHOTS_PER_CALL} per call limit. Split the call.`,
+      );
+    }
+
+    // All images share the aggregate inline budget, split evenly over the shots still to come.
+    let budget = MAX_MATRIX_IMAGE_BYTES;
+    let remaining = total;
+    const entries: Array<Record<string, unknown>> = [];
+    const images: ToolContent[] = [];
+    const warnings: string[] = [];
+    for (const target of targets) {
+      const who = target.client === undefined ? {} : { client: target.client, instance_id: target.alias };
+      let started = 0;
+      const shoot = async (index: number, held = true) => {
+        started++;
+        const share = Math.max(1, Math.min(MAX_INLINE_IMAGE_BYTES, Math.floor(budget / remaining)));
+        remaining--;
+        const capture = await this._captureViewportImage(target.instanceId, target.role, format, quality, share, maxWidth);
+        const label = views?.[index].label ?? (perTarget > 1 ? `view-${index + 1}` : target.client ?? 'view-1');
+        const drift = held ? {} : { warning: 'The camera did not stay at this view, so the image may show where a game script moved it instead.' };
+        if (!capture.success) {
+          entries.push({ label, ...who, error: capture.error, ...drift });
+          return;
+        }
+        budget -= Math.ceil((capture.data.length * 3) / 4);
+        images.push({ type: 'image', data: capture.data, mimeType: capture.mimeType });
+        entries.push({ image: images.length, label, ...who, ...this._screenshotFields(capture), ...drift });
+      };
+      try {
+        if (views === undefined) {
+          await shoot(0);
+        } else {
+          const { restoreError } = await this.fork.withCameraViews(this._capturePeer(target.instanceId, target.role), views, shoot);
+          if (restoreError !== undefined) warnings.push(`${target.client ?? 'edit'} camera was not restored: ${restoreError}`);
+        }
+      } catch (error) {
+        remaining -= perTarget - started;
+        entries.push({ ...who, error: errorMessage(error) });
+      }
+    }
+
+    const summary = {
+      images: entries,
+      message: 'Image blocks follow in the order of images[].image. Mouse input takes original viewport pixels of the client in instance_id, so multiply image coordinates by scale when it is present.',
+      ...(warnings.length > 0 ? { warnings } : {}),
+    };
+    if (images.length === 0) return this._textResult({ error: 'No screenshot was captured.', ...summary });
+    return { content: [{ type: 'text', text: JSON.stringify(summary) }, ...images] };
   }
 }

@@ -77,7 +77,7 @@ const inherited = {
   Path: 'C:\\Users\\Personal\\bin',
   MCP_INSTANCE_ID: 'personal-studio',
   MCP_PLUGINS_DIR: 'C:\\Users\\Personal\\Plugins',
-  ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR: 'C:\\Users\\Personal\\registry',
+  LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR: 'C:\\Users\\Personal\\registry',
   ROBLOX_STUDIO_EXE: 'C:\\Users\\Personal\\Studio.exe',
   RSMCP_STUDIO_WORKING_DIRECTORY: 'C:\\Users\\Personal',
   RSMCP_STUDIO_TEST_SAFETY_DIR: 'C:\\Users\\Personal\\safety',
@@ -98,7 +98,7 @@ assert.equal(env.USERNAME, 'StudioTests');
 assert.equal(env.USERDOMAIN, 'MACHINE');
 assert.equal(env.PATH, 'C:\\Program Files\\nodejs;C:\\Windows\\System32;C:\\Users\\StudioTests\\bin');
 assert.equal(Object.values(env).some((value) => value.includes('Personal')), false, 'child receives no inherited personal profile paths');
-for (const key of ['MCP_INSTANCE_ID', 'MCP_PLUGINS_DIR', 'ROBLOXSTUDIO_MCP_MANAGED_INSTANCE_REGISTRY_DIR', 'ROBLOX_STUDIO_EXE', 'RSMCP_STUDIO_WORKING_DIRECTORY', 'NODE_OPTIONS', 'NODE_PATH', 'PSModulePath', 'WinPSModulePath', 'WSLENV', 'npm_config_cache', 'Path', 'localappdata']) {
+for (const key of ['MCP_INSTANCE_ID', 'MCP_PLUGINS_DIR', 'LUMEN_MCP_MANAGED_INSTANCE_REGISTRY_DIR', 'ROBLOX_STUDIO_EXE', 'RSMCP_STUDIO_WORKING_DIRECTORY', 'NODE_OPTIONS', 'NODE_PATH', 'PSModulePath', 'WinPSModulePath', 'WSLENV', 'npm_config_cache', 'Path', 'localappdata']) {
   assert.equal(key in env, false, `${key} must not leak into the dedicated harness`);
 }
 assert.equal('RSMCP_STUDIO_TEST_SAFETY_DIR' in env, false);
@@ -160,7 +160,7 @@ for (const mode of ['enroll', 'run']) {
       async runSafely(runEnv, operation) {
         safetyCalls++;
         assert.equal(runEnv.RSMCP_STUDIO_TEST_SAFETY_DIR,
-          path.win32.join(identity.localAppData, 'robloxstudio-mcp', 'test-safety'));
+          path.win32.join(identity.localAppData, 'lumen-mcp', 'test-safety'));
         assert.equal(runEnv.RSMCP_STUDIO_TEST_PREPARED, '1');
         insideRun = true;
         try { return await operation(); } finally { insideRun = false; }

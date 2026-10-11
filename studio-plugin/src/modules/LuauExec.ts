@@ -41,7 +41,7 @@ interface ExecuteResult {
 	message?: string;
 }
 
-const PAYLOAD_INSTANCE_NAME = "__MCPExecLuauPayload";
+const PAYLOAD_INSTANCE_NAME = "__LumenExecLuauPayload";
 const REQUIRE_GENERIC_ERROR = "Requested module experienced an error while loading";
 
 // Number of lines the wrapper emits BEFORE the first line of user code.
@@ -68,7 +68,8 @@ function luaPatternEscape(s: string): string {
 	return escaped;
 }
 
-function buildWrapper(code: string, payloadInstanceName = PAYLOAD_INSTANCE_NAME): string {
+function buildWrapper(code: string, payloadInstanceName = PAYLOAD_INSTANCE_NAME, deadlineSeconds?: number): string {
+	const deadline = deadlineSeconds !== undefined && deadlineSeconds > 0 ? tostring(deadlineSeconds) : "nil";
 	// If you reorder the prefix lines below, update WRAPPER_LINE_OFFSET to
 	// match the number of lines emitted BEFORE the ${code} substitution.
 	// The constant is mirrored inside the wrapper (__mcp_LINE_OFFSET) and
@@ -163,7 +164,7 @@ ${code}
 \tend
 \t__mcp_remap = function(s)
 \t\t-- Two chunk-name formats can reference our payload:
-\t\t--   * "Workspace.__MCPExecLuauPayload:N" — ModuleScript:require fallback path
+\t\t--   * "Workspace.__LumenExecLuauPayload:N" — ModuleScript:require fallback path
 \t\t--   * "[string \\"return ((function()...\\"]:N" — loadstring() (default in plugin)
 \t\t-- Subtract LINE_OFFSET to get the user-relative number, then clamp.
 \t\t-- Clamping matters for unclosed constructs ("local x = (") where the
@@ -198,7 +199,7 @@ ${code}
 \t\tlocal kept = {}
 \t\tfor line in string.gmatch(raw, "[^\\n]+") do
 \t\t\t-- Extract referenced line number (either chunk-name format).
-\t\t\tlocal num_str = string.match(line, "__MCPExecLuauPayload:(%d+)")
+\t\t\tlocal num_str = string.match(line, "__LumenExecLuauPayload:(%d+)")
 \t\t\t\tor string.match(line, '%[string "[^"]+"%]:(%d+)')
 \t\t\tlocal n = num_str and tonumber(num_str)
 \t\t\t-- Strip the "in function '__mcp_run'" annotation before doing
@@ -207,7 +208,7 @@ ${code}
 \t\t\t-- user frame would otherwise match a naive "__mcp_" filter and
 \t\t\t-- get dropped. Strip first, then apply filters.
 \t\t\tline = (string.gsub(line, " in function '__mcp_run'", ""))
-\t\t\tlocal skip = string.find(line, "MCPPlugin", 1, true)
+\t\t\tlocal skip = string.find(line, "LumenPlugin", 1, true)
 \t\t\t\tor string.find(line, "__mcp_", 1, true)
 \t\t\t\tor string.find(line, "in function 'xpcall'", 1, true)
 \t\t\t-- Frame lines pointing at wrapper preamble/postamble (outside
@@ -223,7 +224,49 @@ ${code}
 \t\tend
 \t\treturn table.concat(kept, "\\n")
 \tend
-\tlocal ok, errOrValue = xpcall(__mcp_run, __mcp_traceback)
+\tlocal __mcp_DEADLINE = ${deadline}
+\tlocal ok, errOrValue
+\tif __mcp_DEADLINE == nil then
+\t\tok, errOrValue = xpcall(__mcp_run, __mcp_traceback)
+\telse
+\t\t-- A yield that never resumes, like WaitForChild on a child that never comes, would hold the caller until its
+\t\t-- request timed out and could still run the rest much later, so the code runs in a thread cancelled at the deadline.
+\t\tlocal __mcp_log_start = #__mcp_LogService:GetLogHistory()
+\t\tlocal __mcp_caller = coroutine.running()
+\t\tlocal __mcp_done, __mcp_waiting = false, false
+\t\tlocal __mcp_worker = task.spawn(function()
+\t\t\tok, errOrValue = xpcall(__mcp_run, __mcp_traceback)
+\t\t\t__mcp_done = true
+\t\t\tif __mcp_waiting then
+\t\t\t\t__mcp_waiting = false
+\t\t\t\ttask.spawn(__mcp_caller)
+\t\t\tend
+\t\tend)
+\t\tif not __mcp_done then
+\t\t\t__mcp_waiting = true
+\t\t\tlocal __mcp_timer = task.delay(__mcp_DEADLINE, function()
+\t\t\t\tif __mcp_waiting then
+\t\t\t\t\t__mcp_waiting = false
+\t\t\t\t\ttask.spawn(__mcp_caller)
+\t\t\t\tend
+\t\t\tend)
+\t\t\tcoroutine.yield()
+\t\t\tpcall(task.cancel, __mcp_timer)
+\t\t\tif not __mcp_done then
+\t\t\t\tpcall(task.cancel, __mcp_worker)
+\t\t\t\tlocal __mcp_yields = {}
+\t\t\t\tlocal __mcp_hist = __mcp_LogService:GetLogHistory()
+\t\t\t\tfor i = __mcp_log_start + 1, #__mcp_hist do
+\t\t\t\t\tlocal msg = tostring(__mcp_hist[i].message)
+\t\t\t\t\tif string.find(msg, "Infinite yield possible", 1, true) then table.insert(__mcp_yields, msg) end
+\t\t\t\tend
+\t\t\t\tok = false
+\t\t\t\terrOrValue = "still yielding after " .. __mcp_DEADLINE .. "s, so it was cancelled there and later lines did not run. "
+\t\t\t\t\t.. (if #__mcp_yields > 0 then table.concat(__mcp_yields, "; ") .. ". " else "")
+\t\t\t\t\t.. "Use FindFirstChild or WaitForChild(name, seconds) for what may never appear, or raise timeout_s."
+\t\t\tend
+\t\tend
+\tend
 \treturn { ok = ok, value = errOrValue, output = __mcp_output }
 end)())`;
 }
@@ -276,7 +319,7 @@ function runViaModuleScript(wrapped: string, userLines: number): WrapperResult {
 	});
 	if (!okSet) {
 		m.Destroy();
-		// error(..., 0) suppresses the "user_MCPPlugin.rbxmx.MCPPlugin.modules.LuauExec:N:"
+		// error(..., 0) suppresses the "user_LumenPlugin.rbxmx.LumenPlugin.modules.LuauExec:N:"
 		// prefix that error() would otherwise prepend, keeping the visible
 		// message focused on the user-actionable error rather than our path.
 		error(`ModuleScript Source set failed: ${tostring(setErr)}`, 0);
@@ -341,11 +384,17 @@ function recoverPayloadRequireError(
 	return remapPayloadLines(errMsg, userLines, payloadInstanceName);
 }
 
-function execute(code: string): ExecuteResult {
+// Callers that set timeout_s get their code cancelled at that deadline, others keep running until it returns.
+function deadlineOf(data: Record<string, unknown> | undefined): number | undefined {
+	const value = data !== undefined ? data.timeout_s : undefined;
+	return typeIs(value, "number") && value > 0 ? value : undefined;
+}
+
+function execute(code: string, deadlineSeconds?: number): ExecuteResult {
 	if (!code || code === "") {
 		return { success: false, error: "code is required" };
 	}
-	const wrapped = buildWrapper(code);
+	const wrapped = buildWrapper(code, PAYLOAD_INSTANCE_NAME, deadlineSeconds);
 	const userLines = countLines(code);
 
 	let [success, result] = pcall(() => {
@@ -396,6 +445,7 @@ function execute(code: string): ExecuteResult {
 export = {
 	buildWrapper,
 	countLines,
+	deadlineOf,
 	execute,
 	formatReturnValue,
 	recoverPayloadRequireError,
