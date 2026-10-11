@@ -33,17 +33,26 @@ export function writeArtifact(requested: string, data: string | Buffer, env: Nod
     }
   }
 
-  // O_NOFOLLOW refuses a planted symlink at the final name, dangling or not.
+  // Windows has no O_NOFOLLOW, so a planted symlink at the final name, dangling or not, is refused before opening,
+  // a new file is created exclusively, and an existing one must still be the checked file before it is truncated.
+  const symlink = () => new Error(`Output path ${requested} is a symlink; refusing to write through it.`);
+  const before = fs.lstatSync(target, { throwIfNoEntry: false, bigint: true });
+  if (before?.isSymbolicLink()) throw symlink();
+  if (before && !before.isFile()) throw new Error(`Output path ${requested} is not a plain file.`);
+  const create = before ? 0 : fs.constants.O_CREAT | fs.constants.O_EXCL;
   let fd: number;
   try {
-    fd = fs.openSync(target, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW, 0o644);
+    fd = fs.openSync(target, fs.constants.O_WRONLY | create | (fs.constants.O_NOFOLLOW ?? 0), 0o644);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
-      throw new Error(`Output path ${requested} is a symlink; refusing to write through it.`);
-    }
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ELOOP') throw symlink();
+    if (code === 'EEXIST') throw new Error(`Output path ${requested} appeared while it was being opened; refusing to write.`);
     throw error;
   }
   try {
+    const opened = fs.fstatSync(fd, { bigint: true });
+    if (before && (opened.ino !== before.ino || opened.dev !== before.dev)) throw symlink();
+    fs.ftruncateSync(fd, 0);
     fs.writeFileSync(fd, data);
   } finally {
     fs.closeSync(fd);

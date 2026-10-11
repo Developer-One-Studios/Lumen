@@ -47,6 +47,15 @@ describe('artifact path confinement', () => {
     expect(fs.readFileSync(path.join(outside, 'existing'), 'utf8')).toBe('keep');
   });
 
+  test('an existing artifact is replaced whole, and a folder at the final name is refused', () => {
+    const { root, env } = sandbox();
+    writeArtifact('report.json', 'a much longer first version', env);
+    writeArtifact('report.json', 'short', env);
+    expect(fs.readFileSync(path.join(root, 'report.json'), 'utf8')).toBe('short');
+    fs.mkdirSync(path.join(root, 'folder.json'));
+    expect(() => writeArtifact('folder.json', 'x', env)).toThrow(/not a plain file/);
+  });
+
   test('reads through a symlink out of the root are refused', () => {
     const { root, outside, env } = sandbox();
     fs.writeFileSync(path.join(outside, 'secret.json'), '{}');
