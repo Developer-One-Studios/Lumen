@@ -1,13 +1,35 @@
 # Lumen
 
-**See what your Roblox game is really doing.**
+**Full Roblox Studio control for AI agents, plus the tools to find what is broken.**
 
-Lumen connects AI coding agents such as Claude Code, Codex and Cursor to Roblox Studio.
-Agents can edit places, run Luau on the edit, server and client peers, drive playtests, and read logs, screenshots and profiler data.
+Lumen is an MCP server and Studio plugin that connects AI coding agents such as Claude Code, Codex and Cursor to Roblox Studio.
+It covers the core of every Studio MCP, the official one included.
+Agents explore and edit the place and its scripts, run Luau on the edit, server and client peers, drive playtests with keyboard, mouse and character input, and read logs, screenshots and profiler data.
+They also search, insert and upload assets.
 On top of that, Lumen adds tools that answer the questions a game team actually asks while shipping: why does it lag, what leaks, did that sync land, is this jump possible, does the shop button fit on a phone.
 
 Lumen is a private team build.
 It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.0, keeps all 49 of its tools, and adds 24 more for 73 in total.
+
+## The core of every Studio MCP
+
+| Area | Lumen tools | Official Roblox Studio MCP |
+| --- | --- | --- |
+| Explore the place | `get_project_structure`, `search_objects`, `get_instance_properties`, `get_attributes`, `get_place_info`, `selection` | `search_game_tree`, `inspect_instance`, `get_studio_state` |
+| Read and search scripts | `get_script_source`, `grep_scripts` | `script_read`, `script_grep`, `script_search` |
+| Edit instances | `manage_instance`, `set_properties` | through `execute_luau` |
+| Edit scripts | `set_script_source`, `edit_script_lines`, `insert_script_lines`, `delete_script_lines`, `find_and_replace_in_scripts`, `multi_edit` | `multi_edit` |
+| Run Luau | `execute_luau` on any peer, `eval_server_runtime`, `eval_client_runtime` | `execute_luau` |
+| Playtests | `solo_playtest`, `multiplayer_playtest` with several clients | `start_stop_play` |
+| Player input | `simulate_keyboard_input`, `simulate_mouse_input`, `navigate_character` | `user_keyboard_input`, `user_mouse_input`, `character_navigation` |
+| Output | `get_runtime_logs` per peer, `get_errors` | `get_console_output` |
+| Screenshots and devices | `capture_screenshot`, `capture_device_matrix`, `set_device_simulator`, `set_network_profile` | `screen_capture` |
+| Profiling and debugging | `capture_micro_profiler`, `capture_script_profiler`, `get_memory_breakdown`, `get_scene_analysis`, `breakpoints` | none |
+| Creator Store and uploads | `search_assets`, `preview_asset`, `insert_asset`, `get_asset_details`, `upload_asset` | `search_asset`, `insert_asset`, `upload_image` |
+| Models | `import_rbxm`, `export_rbxm`, `generate_model` | `generate_procedural_model`, `generate_mesh` |
+| Monetization | `manage_monetization` for developer products and game passes | none |
+| Docs and skills | `get_roblox_docs`, `get_roblox_skills` | `skill` |
+| Several Studios | `get_connected_instances`, `get_request_status` | `list_roblox_studios` |
 
 ## What Lumen adds
 
