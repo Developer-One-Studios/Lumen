@@ -1,9 +1,10 @@
 import { existsSync, readdirSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join } from 'path/posix';
 
 // Studio on native Linux runs inside a Wine prefix, usually one Vinegar manages.
 // Its Plugins folder lives under the prefix's Windows profile, not ~/Documents.
+// The prefixes are Linux paths, so they are joined with forward slashes whatever host runs the tests.
 export function wineStudioPrefixes(env: NodeJS.ProcessEnv = process.env, home = homedir()): string[] {
   const dataHome = env.XDG_DATA_HOME || join(home, '.local', 'share');
   return [

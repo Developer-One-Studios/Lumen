@@ -74,9 +74,11 @@ describe('canonical instance paths', () => {
 describe('Rojo sourcemap resolution', () => {
   test('indexes script files of a place project and ignores non-script file paths', () => {
     const index = buildSourcemapIndex(SOURCEMAP, '/proj/sourcemap.json');
-    expect(index.byPath.get('game.ServerScriptService.Main')).toBe('/proj/src/server/Main.server.luau');
-    expect(index.byPath.get('game.ReplicatedStorage["my module"]')).toBe('/proj/src/shared/my module.luau');
-    expect(index.byFile.get('/proj/src/server/Combat/Damage.luau')).toBe('game.ServerScriptService.Combat.Damage');
+    // Files resolve to native absolute paths, so /proj becomes a drive path on Windows.
+    const file = (relative: string) => path.resolve('/proj', relative);
+    expect(index.byPath.get('game.ServerScriptService.Main')).toBe(file('src/server/Main.server.luau'));
+    expect(index.byPath.get('game.ReplicatedStorage["my module"]')).toBe(file('src/shared/my module.luau'));
+    expect(index.byFile.get(file('src/server/Combat/Damage.luau'))).toBe('game.ServerScriptService.Combat.Damage');
     expect(index.byPath.has('game.ServerScriptService.Combat')).toBe(false);
   });
 
