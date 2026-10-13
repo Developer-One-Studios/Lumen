@@ -9,7 +9,7 @@ They also search, insert and upload assets.
 On top of that, Lumen adds tools that answer the questions a game team actually asks while shipping: why does it lag, what leaks, did that sync land, is this jump possible, does the shop button fit on a phone.
 
 Lumen is a private team build.
-It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.0, keeps all 49 of its tools, and adds 24 more for 73 in total.
+It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.0, keeps all 49 of its tools, and adds 26 more for 75 in total.
 
 ## The core of every Studio MCP
 
@@ -40,6 +40,7 @@ It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3
 | Playtests | `playtest_scenario`, `wait_for`, `watch` | One call runs keys, clicks, walks, checks and screenshots and returns one report with errors from every peer. |
 | Movement | `navigate_character` | Pathfinding walks that stop within seconds when blocked and name the part in the way. |
 | Safe experiments | `checkpoint` | Snapshot the place, list every change since, and undo it all as one Ctrl+Z step. |
+| Moving content | `copy_instances`, `move_instances` | Copy a whole map from one open place into another without a file, and move or turn Folders, each as one Ctrl+Z step. |
 | Level QA | `spatial_check` | Floating parts, overlaps, buried parts, jump gaps with real jump physics, pathfinding reach and distances. |
 | UI QA | `ui_audit`, `inspect_gui` | Offscreen, clipped, overlapping, tiny or unreadable GUI across phone, tablet and PC presets, plus clicks by GuiObject path. |
 | Screenshots | `capture_views` | Shots from chosen camera positions in edit mode or on playtest clients, held even against game camera scripts. |

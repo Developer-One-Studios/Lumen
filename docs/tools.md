@@ -1,7 +1,7 @@
 # Lumen tool reference
 
-Lumen has 73 tools.
-This page covers the 24 that Lumen adds and the upstream tools it changes.
+Lumen has 75 tools.
+This page covers the 26 that Lumen adds and the upstream tools it changes.
 The other upstream tools are listed with their full schemas in `packages/core/src/tools/definitions.ts`, and agents can read the workflow guides at the `lumen://tool-guides` resource.
 
 Every tool that talks to Studio accepts `instance_id` to pick a Studio process when several are connected.
@@ -136,6 +136,32 @@ On a 125,000 instance place, create takes about 0.7 seconds and revert about 2 s
 
 Applies several text edits to one script as one atomic, undoable step, or creates the script when it is missing.
 When an `old_string` does not match exactly, the edit is retried ignoring whitespace and applied only if that match is unique.
+
+## Moving content
+
+### `copy_instances`
+
+Copies instances from one open place into another, or within one place, without writing a file.
+
+- `instance_paths`: what to copy from the source place.
+- `parent_path`: where to put the copies in the destination place.
+- `source_instance_id`: the Studio process to copy from. Without it the copy stays inside `instance_id`.
+- `name`: a new name for the copy when copying one instance.
+
+The copy lands as one undo step named "MCP: copy instances" in the destination.
+Each copy reports `same_named_siblings` when its parent already has children with its name, since a path then resolves to the first of them.
+
+### `move_instances`
+
+Moves or turns Models, parts and Folders as one undo step named "MCP: move instances".
+
+- `offset`: studs to move by.
+- `to`: where the centre of everything moved should end up, instead of `offset`.
+- `rotation`: degrees to turn by, applied before moving.
+- `origin`: the point to turn about, the bounding box centre by default.
+
+Welded parts stay together, Models with a PrimaryPart follow it, and Models without one keep their pivot in the same place relative to their parts.
+The result has the bounding box before and after, so the move can be checked without a screenshot.
 
 ## Level and UI QA
 
@@ -272,3 +298,4 @@ It never writes.
 | `simulate_mouse_input` | `instance_path` clicks a GuiObject on a point no other button covers, and refuses when it is covered everywhere. |
 | Script edit tools | Refuse scripts that Rojo syncs, waiting for the first sourcemap build when one is running. Set `ROBLOX_ALLOW_SYNCED_EDITS=1` to allow it. |
 | `manage_instance` | Launch overrides that can run any program need `ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES=1`. |
+| `export_rbxm`, `import_rbxm` | A relative path is written to and read from `ROBLOX_MCP_ARTIFACT_DIR` when it is set, so the same name works for both. |

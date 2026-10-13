@@ -6,6 +6,7 @@ import { diagnosticsFeature } from './diagnostics.js';
 import { playtestFeature } from './playtest.js';
 import { spatialFeature } from './spatial.js';
 import { syncFeature } from './sync.js';
+import { transferFeature } from './transfer.js';
 import { uiAuditFeature } from './ui-audit.js';
 import { uploadsFeature } from './uploads.js';
 
@@ -19,4 +20,5 @@ export const FORK_FEATURES: ForkFeature[] = [
   diagnosticsFeature,
   cloudFeature,
   uploadsFeature,
+  transferFeature,
 ];
