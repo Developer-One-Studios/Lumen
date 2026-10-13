@@ -1753,7 +1753,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         output_path: {
           type: 'string',
-          description: 'Absolute .rbxm output path.'
+          description: '.rbxm path, a relative one lands in the artifact folder.'
         },
         target: {
           type: 'string',
@@ -1779,7 +1779,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'object',
           description: 'Exactly one path, URL, or base64 source. All inputs are capped below 37.5 MiB to fit base64 plus routing metadata within transport limits; URL downloads have a 30-second deadline.',
           properties: {
-            path: { type: 'string', description: 'Absolute local .rbxm path.' },
+            path: { type: 'string', description: 'Local .rbxm path, a relative one reads from the artifact folder.' },
             url: { type: 'string', description: 'HTTP or HTTPS .rbxm URL.' },
             base64: { type: 'string', description: 'Base64-encoded .rbxm bytes.' }
           },

@@ -55,6 +55,23 @@ test('local files are bounded before allocation; small files and base64 round-tr
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test('relative paths read from the artifact folder, where export_rbxm writes them', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'mcp-rbxm-'));
+  const previous = process.env.ROBLOX_MCP_ARTIFACT_DIR;
+  try {
+    await writeFile(join(directory, 'map.rbxm'), 'rbxm bytes');
+    process.env.ROBLOX_MCP_ARTIFACT_DIR = directory;
+    const input = await readRbxmInput({ path: 'map.rbxm' }, 'game.Workspace');
+    expect(input.bytes).toEqual(Buffer.from('rbxm bytes'));
+    expect(input.sourceLabel).toBe(join(directory, 'map.rbxm'));
+    expect((await readRbxmInput({ path: join(directory, 'map.rbxm') }, 'game.Workspace')).bytes).toEqual(Buffer.from('rbxm bytes'));
+  } finally {
+    if (previous === undefined) delete process.env.ROBLOX_MCP_ARTIFACT_DIR;
+    else process.env.ROBLOX_MCP_ARTIFACT_DIR = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test.each(['!!!!', 'a', 'YW=Jj', 'YR==', 'cmJ4bS\u00a0Bi', 'cmJ4bS-Bi'])('rejects malformed base64 %s', async (base64) => {
   await expect(readRbxmInput({ base64 }, 'game.Workspace')).rejects.toThrow('base64');
 });

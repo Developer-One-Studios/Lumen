@@ -97,7 +97,9 @@ export async function readRbxmInput(
   }
   signal?.throwIfAborted();
   if (source.path !== undefined) {
-    const sourceLabel = resolve(source.path);
+    // Relative paths read from the artifact folder when one is set, where export_rbxm writes the same name.
+    const root = process.env.ROBLOX_MCP_ARTIFACT_DIR?.trim();
+    const sourceLabel = root ? resolve(root, source.path) : resolve(source.path);
     const limit = rbxmInputByteLimit(parentPath, sourceLabel);
     const file = await open(sourceLabel, 'r');
     try {

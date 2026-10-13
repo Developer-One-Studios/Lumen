@@ -5023,7 +5023,9 @@ export class RobloxStudioTools {
     try {
       resolved = writeArtifact(outputPath, bytes);
     } catch (err) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: `failed to write ${outputPath}: ${(err as Error).message}` }) }] };
+      const message = (err as Error).message;
+      const hint = message.includes('outside ROBLOX_MCP_ARTIFACT_DIR') ? ' Pass a relative output_path such as "name.rbxm" to write inside it.' : '';
+      return { content: [{ type: 'text', text: JSON.stringify({ error: `failed to write ${outputPath}: ${message}${hint}` }) }] };
     }
 
     return {
