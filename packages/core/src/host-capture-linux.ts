@@ -9,6 +9,8 @@ const X11_TOOL_TIMEOUT_MS = 15_000;
 // A 4K RGBX frame is about 33 MB.
 const XWD_MAX_BYTES = 256 * 1024 * 1024;
 const WINE_STUDIO_CLASS = 'robloxstudiobeta.exe';
+// Plain Wine names the class after the executable, while Proton builds, which Vinegar runs Studio on, report steam_proton.
+const STUDIO_WINDOW_CLASSES = [WINE_STUDIO_CLASS, 'steam_proton'];
 const MIN_STUDIO_WINDOW_EDGE = 200;
 
 export type X11Window = {
@@ -60,10 +62,11 @@ export function parseXwininfoTree(output: string): X11Window[] {
   return windows;
 }
 
-function isStudioWindow(window: X11Window): boolean {
+export function isStudioWindow(window: X11Window): boolean {
   const studioTitle = window.title === 'Roblox Studio' || window.title.endsWith(' - Roblox Studio');
+  const className = window.className.toLowerCase();
   return studioTitle
-    && window.className.toLowerCase().includes(WINE_STUDIO_CLASS)
+    && STUDIO_WINDOW_CLASSES.some((name) => className.includes(name))
     && window.width >= MIN_STUDIO_WINDOW_EDGE
     && window.height >= MIN_STUDIO_WINDOW_EDGE;
 }

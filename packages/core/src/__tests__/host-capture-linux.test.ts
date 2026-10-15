@@ -54,6 +54,14 @@ describe('Linux X11 host capture', () => {
     expect(pickStudioWindow([])).toMatch(/no Roblox Studio X11 window/);
   });
 
+  test('accepts Studio running on Proton, whose window class is steam_proton', () => {
+    const windows = parseXwininfoTree(
+      '     0x2800004 "Arena - Roblox Studio": ("steam_proton" "steam_proton")  2560x1368+2560+72  +2560+72\n' +
+      '     0x2900004 "Some Game": ("steam_proton" "steam_proton")  1920x1080+0+0  +0+0\n',
+    );
+    expect(pickStudioWindow(windows)).toMatchObject({ id: 0x2800004 });
+  });
+
   test('refuses to guess between two Studio places', () => {
     const windows = parseXwininfoTree(`${TREE}     0x1b00007 "Lobby - Roblox Studio": ("robloxstudiobeta.exe" "robloxstudiobeta.exe")  1920x1080+0+0  +0+0\n`);
     expect(pickStudioWindow(windows)).toMatch(/2 Roblox Studio windows match/);
