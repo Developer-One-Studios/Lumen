@@ -223,6 +223,7 @@ under Wine.
 | `ROBLOX_STUDIO_HOST_CAPTURE` | Unset | Set to `0`, `false`, or `off` to disable the host window capture fallback for `capture_screenshot`. |
 | `ROBLOX_OPEN_CLOUD_API_KEY` | None | Roblox Open Cloud key used by features such as audio preview, place version access, and monetization. Required permissions depend on the tool. |
 | `ROBLOX_OPEN_CLOUD_API_KEY_FILE` | Unset | File holding the Open Cloud key, read at startup when `ROBLOX_OPEN_CLOUD_API_KEY` is unset, so the key stays out of process listings and client configs. |
+| `ROBLOX_STUDIO_LOG_DIR` | Studio's log folder | Folder `get_playtest_logs` reads Studio's log files from. Found on its own on Windows, macOS, WSL and in Vinegar or Wine prefixes. |
 | `MCP_PLUGINS_DIR` | Platform Studio Plugins folder | Override the destination used by plugin installation. |
 | `ROBLOX_STUDIO_EXE` | Auto-discovered on Windows, WSL, and macOS | Studio executable to launch. Required on native Linux with a Wine launcher, where it must be an existing `RobloxStudioBeta.exe` in the Wine prefix. |
 | `ROBLOX_STUDIO_WINE_LAUNCHER` | Unset | Native Linux only: executable that `exec`s Wine on Studio. See [Native Linux with Wine](#native-linux-with-wine). |

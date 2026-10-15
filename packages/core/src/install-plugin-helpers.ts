@@ -72,12 +72,12 @@ export function isWSL(): boolean {
   return getStudioPlatformCapabilities().isWsl;
 }
 
-interface WindowsUserLocalAppData {
+export interface WindowsUserLocalAppData {
   linuxPath: string;
   windowsPath: string;
 }
 
-function getWindowsUserLocalAppData(): WindowsUserLocalAppData | null {
+export function getWindowsUserLocalAppData(): WindowsUserLocalAppData | null {
   // Resolve Windows %LOCALAPPDATA% from the WSL side and translate it via
   // wslpath. cmd.exe spams a "UNC paths are not supported" warning to stderr
   // when the CWD is on the Linux side - silence it with stdio: 'ignore'.

@@ -240,6 +240,13 @@ Returns a deduplicated digest of errors and warnings from every peer, each with 
 A bare call continues where the previous call stopped, and `since: "all"` reads everything still buffered.
 `exclude` drops messages containing any of the given texts before grouping, so noise such as asset permission errors does not use up the limit.
 
+### `get_playtest_logs`
+
+Reads the script output of a playtest that already ended, from Studio's own log files, which keep every playtest's output after its DataModels are gone.
+`list` shows recent playtests with their place, times, client count and error counts, and `playtest` picks one, 1 being the latest.
+`level`, `filter`, `exclude` and `tail` narrow the lines.
+Lines carry no server or client label, and `ROBLOX_STUDIO_LOG_DIR` overrides where the logs are read from.
+
 ### `replication_diff`
 
 Compares one instance between the server and each client: properties, attributes and optionally children.

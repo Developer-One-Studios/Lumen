@@ -3,6 +3,7 @@ import { captureFeature } from './capture.js';
 import { checkpointFeature } from './checkpoint.js';
 import { cloudFeature } from './cloud.js';
 import { diagnosticsFeature } from './diagnostics.js';
+import { playtestLogsFeature } from './playtest-logs.js';
 import { playtestFeature } from './playtest.js';
 import { spatialFeature } from './spatial.js';
 import { syncFeature } from './sync.js';
@@ -18,6 +19,7 @@ export const FORK_FEATURES: ForkFeature[] = [
   captureFeature,
   syncFeature,
   diagnosticsFeature,
+  playtestLogsFeature,
   cloudFeature,
   uploadsFeature,
   transferFeature,

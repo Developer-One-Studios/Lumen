@@ -45,7 +45,7 @@ It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3
 | UI QA | `ui_audit`, `inspect_gui` | Offscreen, clipped, overlapping, tiny or unreadable GUI across phone, tablet and PC presets, plus clicks by GuiObject path. |
 | Screenshots | `capture_views` | Shots from chosen camera positions in edit mode or on playtest clients, held even against game camera scripts. |
 | Rojo | `resolve_source`, `verify_sync` | Studio paths become `file:line`, edits to synced scripts are refused, and each peer is checked against the files on disk. |
-| Errors | `get_errors` | A deduplicated error and warning digest from every peer since the last call. |
+| Errors | `get_errors`, `get_playtest_logs` | A deduplicated error and warning digest from every peer since the last call, and the output of playtests that already ended. |
 | Networking | `replication_diff`, `fuzz_remotes` | Compare an instance between server and clients, and fire malformed or spammed payloads at remotes. |
 | Tests | `run_tests`, `cloud_luau` | Run the place's test runner in a playtest, or run Luau headlessly on a Roblox cloud server. |
 | Assets | `upload_assets`, `audit_assets`, `datastore_read` | Batch uploads of audio, models, images and animations, straight from a rig's AnimSaves, with Sounds and Animations created in Studio, a check for assets that fail to load live, and read only DataStore access. |
