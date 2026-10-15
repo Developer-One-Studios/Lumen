@@ -95,6 +95,7 @@ None of this is needed on Windows or macOS.
 
 ## Upstream
 
-Lumen tracks [Chrrxs/robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.0.
+Lumen tracks [Chrrxs/robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.1.
+To take a new upstream release, merge its tag (`git fetch upstream --tags`, then `git merge vX.Y.Z`) and keep Lumen's package versions and names in the conflicts.
 `CHANGELOG.md` is upstream's history and stays untouched, and Lumen's own changes are in [releases.md](releases.md).
 Internal names such as `RobloxStudioMCPServer` were kept on purpose, so upstream fixes still merge cleanly.

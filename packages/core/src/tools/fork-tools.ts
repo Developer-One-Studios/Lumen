@@ -24,9 +24,20 @@ export interface PeerTarget {
   peerId: string;
 }
 
+/** A tool's default target, and the roles an instance_id naming one Peer may select instead. */
+export interface TargetDefault {
+  fallback: string;
+  accepts: (role: string) => boolean;
+}
+
+const anyRole = (): boolean => true;
+const isClientRole = (role: string): boolean => /^client-\d+$/.test(role);
+const isRuntimeRole = (role: string): boolean => role === 'server' || isClientRole(role);
+
 // The slice of RobloxStudioTools the composite tools are built on.
 export interface ForkHost {
-  peerTargets(target: string | undefined, instanceId: string | undefined): Promise<PeerTarget[]>;
+  /** With a default, an instance_id naming one accepted Peer picks it when target is omitted. */
+  peerTargets(target: string | undefined, instanceId: string | undefined, defaults?: TargetDefault): Promise<PeerTarget[]>;
   requestPeer(endpoint: string, data: unknown, peerId: string, timeoutMs?: number): Promise<unknown>;
   soloPlaytest(action: string, mode?: string, timeout?: number, instanceId?: string): Promise<ToolResult>;
   getRuntimeLogs(instanceId?: string, cursor?: string): Promise<ToolResult>;
@@ -186,8 +197,10 @@ export class ForkTools {
     return luauValue(await this.host.requestPeer(EXECUTE, { code }, peer.peerId, timeoutMs));
   }
 
-  private async single(target: string | undefined, instanceId: string | undefined, fallback: string): Promise<PeerTarget> {
-    const peers = await this.host.peerTargets(target ?? fallback, instanceId);
+  private async single(target: string | undefined, instanceId: string | undefined, fallback: string, accepts?: (role: string) => boolean): Promise<PeerTarget> {
+    const peers = accepts
+      ? await this.host.peerTargets(target, instanceId, { fallback, accepts })
+      : await this.host.peerTargets(target ?? fallback, instanceId);
     if (peers.length !== 1) throw new Error(`target must name one peer, ${peers.length} matched`);
     return peers[0];
   }
@@ -206,7 +219,7 @@ export class ForkTools {
       remotes: body.remotes === true,
       top_remotes: clamp(body.top_remotes, 10, 1, 50),
     };
-    const peers = await this.host.peerTargets((body.target as string | undefined) ?? 'all', body.instance_id as string | undefined);
+    const peers = await this.host.peerTargets(body.target as string | undefined, body.instance_id as string | undefined, { fallback: 'all', accepts: anyRole });
     const code = perfStatsLuau(args);
     const settled = await Promise.allSettled(peers.map((peer) => this.runOn(peer, code, durationMs + 20_000)));
     const result: Record<string, unknown> = {};
@@ -217,7 +230,7 @@ export class ForkTools {
   }
 
   async lagAudit(body: Record<string, unknown>) {
-    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'edit');
+    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'edit', anyRole);
     const root = typeof body.root === 'string' && body.root !== '' ? body.root : 'game.Workspace';
     return text(await this.runOn(peer, lagAuditLuau({ root, top: clamp(body.top, 10, 1, 50) }), 60_000));
   }
@@ -227,7 +240,7 @@ export class ForkTools {
     if (typeof category !== 'string') throw new Error('category is required');
     if (category === 'instance' && typeof body.path !== 'string') throw new Error('category="instance" needs path');
     const durationMs = clamp(body.duration_ms, 2000, 500, 10_000);
-    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'client-1');
+    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'client-1', isRuntimeRole);
     if (peer.role === 'edit') throw new Error('profile_toggle runs on a playtest server or client, never edit');
     const code = profileToggleLuau({ category, path: body.path as string | undefined, duration_ms: durationMs });
     return text({ peer: peer.role, ...(await this.runOn(peer, code, durationMs * 2 + 30_000)) });
@@ -239,7 +252,7 @@ export class ForkTools {
     const iterations = clamp(body.iterations, 5, 2, 50);
     const settleMs = clamp(body.settle_ms, 1500, 0, 30_000);
     const watch = Array.isArray(body.watch) ? body.watch.filter((item): item is string => typeof item === 'string').slice(0, 10) : [];
-    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'server');
+    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'server', isRuntimeRole);
     if (peer.role === 'edit') throw new Error('leak_check needs a running playtest peer');
 
     // Compiled into the chunk itself, game code has no loadstring unless the place enables it.
@@ -348,7 +361,7 @@ export class ForkTools {
 
   async fuzzRemotes(body: Record<string, unknown>) {
     const instanceId = body.instance_id as string | undefined;
-    const client = await this.single(body.target as string | undefined, instanceId, 'client-1');
+    const client = await this.single(body.target as string | undefined, instanceId, 'client-1', isClientRole);
     if (!/^client-\d+$/.test(client.role)) throw new Error('fuzz_remotes fires from a client peer (target=client-N)');
     const server = (await this.runtimePeers(instanceId)).find((peer) => peer.role === 'server');
     const includeFunctions = body.include_functions === true;
@@ -408,7 +421,7 @@ export class ForkTools {
   }
 
   async inspectGui(body: Record<string, unknown>) {
-    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'client-1');
+    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'client-1', isClientRole);
     const at = body.at as { x?: unknown; y?: unknown } | undefined;
     const args = {
       root: typeof body.root === 'string' ? body.root : undefined,
@@ -422,7 +435,7 @@ export class ForkTools {
 
   /** Viewport pixel centre of a GuiObject on a client, for simulate_mouse_input instance_path. */
   async guiCenter(path: string, target: string | undefined, instanceId: string | undefined): Promise<{ x: number; y: number; path: string }> {
-    const peer = await this.single(target, instanceId, 'client-1');
+    const peer = await this.single(target, instanceId, 'client-1', isClientRole);
     const center = await this.runOn(peer, guiCenterLuau({ path }));
     return center as { x: number; y: number; path: string };
   }
@@ -473,7 +486,7 @@ export class ForkTools {
     const hasPosition = position && [position.x, position.y, position.z].every((value) => typeof value === 'number');
     if (!hasPosition && typeof body.path !== 'string') throw new Error('navigate_character needs position {x,y,z} or path');
     const timeoutS = clamp(body.timeout_s, 20, 1, 120);
-    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'client-1');
+    const peer = await this.single(body.target as string | undefined, body.instance_id as string | undefined, 'client-1', isClientRole);
     const code = navigateLuau({
       position: hasPosition ? position as { x: number; y: number; z: number } : undefined,
       path: hasPosition ? undefined : body.path as string,

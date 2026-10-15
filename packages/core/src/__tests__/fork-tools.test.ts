@@ -9,7 +9,8 @@ function text(body: unknown) {
 function fakeHost(peers: PeerTarget[], reply: (call: Call) => unknown, extra: Partial<ForkHost> = {}) {
   const calls: Call[] = [];
   const host: ForkHost = {
-    peerTargets: async (target) => {
+    peerTargets: async (requested, _instanceId, defaults) => {
+      const target = requested ?? defaults?.fallback;
       if (target === undefined || target === 'all') return peers;
       return peers.filter((peer) => peer.role === target);
     },

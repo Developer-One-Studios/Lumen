@@ -9,7 +9,7 @@ They also search, insert and upload assets.
 On top of that, Lumen adds tools that answer the questions a game team actually asks while shipping: why does it lag, what leaks, did that sync land, is this jump possible, does the shop button fit on a phone.
 
 Lumen is a private team build.
-It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.0, keeps all 49 of its tools, and adds 26 more for 75 in total.
+It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3.2.1, keeps all 49 of its tools, and adds 26 more for 75 in total.
 
 ## The core of every Studio MCP
 
