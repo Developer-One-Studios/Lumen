@@ -16,6 +16,7 @@ import {
 import {
   conditionLuau,
   explainLuauError,
+  frameClockLuau,
   isBody,
   runLuau,
   userFunction,
@@ -221,6 +222,8 @@ describe('playtest Luau', () => {
       { names: ['speed', 'cooldown'], duration_ms: 1000, interval_ms: 50 },
     ).code,
     watchNoAction: watchLuau([userFunction('hp', 'game.Players.LocalPlayer.Character.Humanoid.Health')], undefined, { names: ['hp'], duration_ms: 500, interval_ms: 16 }).code,
+    frameClock: frameClockLuau(userFunction('stamp', 'game.SoundService.Take.TimePosition'), { duration_ms: 3000, gap_ms: 33 }).code,
+    frameClockNoStamp: frameClockLuau(undefined, { duration_ms: 3000, gap_ms: 33 }).code,
   };
 
   (compiler ? test.each(Object.entries(SNIPPETS)) : test.skip.each(Object.entries(SNIPPETS)))('%s compiles as Luau', (name, code) => {
@@ -437,6 +440,7 @@ describe('playtest_scenario', () => {
     const inputs: Array<Record<string, unknown>> = [];
     const captures: Capture[] = [];
     const walks: Array<Record<string, unknown>> = [];
+    const recordings: Array<{ instanceId?: string; options: Record<string, unknown> }> = [];
     const fork = new ForkTools(fake.host);
     fork.navigateCharacter = async (body: Record<string, unknown>) => {
       walks.push(body);
@@ -470,8 +474,13 @@ describe('playtest_scenario', () => {
         }
         return { content: [{ type: 'text', text: JSON.stringify({ width: 800, height: 600, originalWidth: 800, originalHeight: 600 }) }, image] };
       },
+      recordViewport: async (instanceId: string | undefined, options: Record<string, unknown>) => {
+        recordings.push({ instanceId, options });
+        const summary = { frames: 20, studioFps: 60, sheet: { frames: 4, files: ['frame-0001-0ms.png'], stamps: [17.5] } };
+        return { content: [{ type: 'text', text: JSON.stringify(summary) }, { type: 'image', data: imageData, mimeType: 'image/jpeg' }] };
+      },
     } as unknown as RobloxStudioTools;
-    return { ...fake, tools, inputs, captures, walks };
+    return { ...fake, tools, inputs, captures, walks, recordings };
   }
 
   const scenario = (tools: RobloxStudioTools, body: Record<string, unknown>, signal?: AbortSignal) =>
@@ -665,6 +674,29 @@ describe('playtest_scenario', () => {
     const report = json(await scenario(tools, { steps: [{ wait: 0 }] }));
     expect(report.ok).toBe(true);
     expect(report.playtest).toMatchObject({ started: true, stopped: false, stop_error: 'BindToClose is blocking' });
+  });
+
+  test('a record step records in the same call and adds its grid to the images', async () => {
+    const { tools, recordings, playtest } = scenarioTools(['edit'], { 'Take > 17': true });
+    const report = json(await scenario(tools, {
+      steps: [
+        { wait_for: 'Take > 17' },
+        { record: 2, stamp: 'Take', fps: 20, frame_width: 320, sheet_frames: 8, label: 'finish' },
+      ],
+    }));
+    expect(playtest).toEqual(['start:play', 'stop']);
+    expect(recordings).toEqual([{ instanceId: undefined, options: { duration_s: 2, fps: 20, frame_width: 320, sheet_frames: 8, stamp: 'Take' } }]);
+    expect(report.steps[1]).toMatchObject({ kind: 'record', ok: true, label: 'finish', value: { studioFps: 60, image: 1, sheet: { stamps: [17.5] } } });
+    expect(report.screenshots).toEqual([{ label: 'finish', step: 2, image: 1, recording: true }]);
+  });
+
+  test('record steps are checked and capped before the playtest starts', async () => {
+    const { tools, playtest } = scenarioTools(['edit'], {});
+    const run = (steps: unknown) => scenario(tools, { steps });
+    await expect(run([{ record: 0.1 }])).rejects.toThrow(/step 1 \(record\) needs a number of seconds from 0\.5 to 30/);
+    await expect(run([{ record: 31 }])).rejects.toThrow(/from 0\.5 to 30/);
+    await expect(run(Array.from({ length: 5 }, () => ({ record: 1 })))).rejects.toThrow(/at most 4 record steps/);
+    expect(playtest).toEqual([]);
   });
 
   test('rejects malformed steps before touching the playtest', async () => {

@@ -20,6 +20,8 @@ const RUNTIME_LOGS = '/api/get-runtime-logs';
 
 const MAX_STEPS = 100;
 const MAX_SCREENSHOTS = 10;
+const MAX_RECORDINGS = 4;
+const MAX_RECORD_S = 30;
 const MAX_SAMPLES = 600;
 const MAX_EXPRESSIONS = 10;
 const MAX_LOG_GROUPS = 25;
@@ -292,7 +294,7 @@ export async function watchValues(
   return { peer: peer.role, vm, interval_ms: intervalMs, ...shapeSamples(raw, MAX_SAMPLES, explainer(chunk)) };
 }
 
-const STEP_KINDS = ['key', 'text', 'click', 'wait', 'wait_for', 'walk_to', 'run', 'expect', 'screenshot', 'watch'] as const;
+const STEP_KINDS = ['key', 'text', 'click', 'wait', 'wait_for', 'walk_to', 'run', 'expect', 'screenshot', 'watch', 'record'] as const;
 type StepKind = typeof STEP_KINDS[number];
 type Step = { kind: StepKind; arg: unknown; options: Record<string, unknown> };
 type WalkGoal = { path: string } | { position: { x: number; y: number; z: number } };
@@ -328,6 +330,10 @@ function stepProblem(kind: StepKind, arg: unknown): string | undefined {
   switch (kind) {
     case 'wait':
       return typeof arg === 'number' && Number.isFinite(arg) && arg >= 0 ? undefined : 'needs a number of seconds';
+    case 'record':
+      return typeof arg === 'number' && Number.isFinite(arg) && arg >= 0.5 && arg <= MAX_RECORD_S
+        ? undefined
+        : `needs a number of seconds from 0.5 to ${MAX_RECORD_S}`;
     case 'click':
       return nonEmpty(arg) || isPoint(arg, ['x', 'y']) ? undefined : 'needs a GuiObject path or {x, y}';
     case 'walk_to':
@@ -362,6 +368,9 @@ export function parseSteps(raw: unknown): Step[] {
   });
   if (steps.filter((step) => step.kind === 'screenshot').length > MAX_SCREENSHOTS) {
     throw new Error(`a scenario takes at most ${MAX_SCREENSHOTS} screenshots`);
+  }
+  if (steps.filter((step) => step.kind === 'record').length > MAX_RECORDINGS) {
+    throw new Error(`a scenario takes at most ${MAX_RECORDINGS} record steps`);
   }
   return steps;
 }
@@ -418,6 +427,31 @@ async function screenshot(scenario: Scenario, label: string, index: number, clie
   return { value: { label, image: number } };
 }
 
+/** Records the viewport like record_viewport and adds its grid to the report's images, under the same budget. */
+async function recordStep(scenario: Scenario, step: Step, index: number): Promise<StepOutcome> {
+  const { tools, instanceId } = scenario;
+  const { options } = step;
+  const capture: ForkToolResult = await tools.fork.serializeCapture(() => tools.recordViewport(instanceId, {
+    duration_s: step.arg,
+    fps: options.fps,
+    frame_width: options.frame_width,
+    sheet_frames: options.sheet_frames,
+    stamp: options.stamp,
+  }));
+  const summary = parseResult(capture);
+  const image = capture.content.find((item) => item.type === 'image' && typeof item.data === 'string');
+  if (!image?.data) return { value: summary, error: String(summary.error ?? 'the recording returned no grid') };
+  const bytes = Math.ceil((image.data.length * 3) / 4);
+  if (scenario.imageBytes + bytes > IMAGE_BUDGET_BYTES) {
+    return { value: summary, error: `this ${(bytes / 1_000_000).toFixed(1)} MB grid would pass the 8 MB image budget, lower sheet_frames or frame_width` };
+  }
+  scenario.imageBytes += bytes;
+  scenario.images.push({ type: 'image', data: image.data, mimeType: image.mimeType });
+  const label = nonEmpty(options.label) ? options.label : `record ${index}`;
+  scenario.screenshots.push({ label, step: index, image: scenario.images.length, recording: true });
+  return { value: { ...summary, image: scenario.images.length } };
+}
+
 async function runStep(scenario: Scenario, step: Step, index: number): Promise<StepOutcome> {
   const { tools, instanceId } = scenario;
   const { options } = step;
@@ -461,6 +495,8 @@ async function runStep(scenario: Scenario, step: Step, index: number): Promise<S
       return screenshot(scenario, step.arg as string, index, client, nonEmpty(options.client));
     case 'watch':
       return { value: await watchValues(tools.forkHost, { ...probe, expressions: step.arg, duration_ms: options.duration_ms }, instanceId) };
+    case 'record':
+      return recordStep(scenario, step, index);
   }
 }
 
@@ -644,7 +680,7 @@ const definitions: ToolDefinition[] = [
   {
     name: 'playtest_scenario',
     category: 'write',
-    description: 'Use to run a scripted playtest of inputs, waits, checks and screenshots in one call with one report.',
+    description: 'Use to run a scripted playtest of inputs, waits, checks, screenshots and recordings in one call with one report.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -683,6 +719,11 @@ const definitions: ToolDefinition[] = [
               expect: { type: 'string', description: 'Luau condition that must be truthy, counted as an assertion.' },
               screenshot: { type: 'string', description: 'Label of a viewport capture added to the result.' },
               watch: { type: 'object', additionalProperties: { type: 'string' }, description: 'Name to Luau expression map, sampled over duration_ms.' },
+              record: { type: 'number', minimum: 0.5, maximum: MAX_RECORD_S, description: 'Seconds of viewport to record into a timed grid.' },
+              stamp: { type: 'string', description: 'Luau value drawn on each recorded frame.' },
+              fps: { type: 'integer', minimum: 1, maximum: 30, description: 'Frames a second a record step grabs, defaults to 15.' },
+              frame_width: { type: 'integer', minimum: 64, maximum: 1280, description: 'Width of each recorded frame, defaults to 480.' },
+              sheet_frames: { type: 'integer', minimum: 1, maximum: 48, description: 'Frames shown in a record grid, defaults to 24.' },
               label: { type: 'string', description: 'Name for this step in the report.' },
               client: { type: 'string', description: 'client-N that this input step drives.' },
               peer: peerArg,
@@ -748,8 +789,12 @@ const guide = `
 
 - playtest_scenario is the preferred way to test gameplay.
   One call starts a solo playtest when none runs, runs every step, collects errors and warnings from every peer, and stops the playtest it started.
-- Each step object has exactly one kind key (key, text, click, wait, wait_for, walk_to, run, expect, screenshot or watch).
+- Each step object has exactly one kind key (key, text, click, wait, wait_for, walk_to, run, expect, screenshot, watch or record).
   Optional label, client, peer, vm, hold_s, timeout_s, duration_ms and interval_ms tune that step.
+- record takes seconds of viewport to record, like record_viewport, with optional fps, frame_width, sheet_frames and stamp.
+  Its timed grid joins the screenshots as an image, its summary is the step value, and a scenario takes at most 4 record steps.
+- A cutscene check fits one call: wait_for the game to load, run what triggers it, wait_for the moment (a peer=client-1 condition on the cutscene's own clock), then record with stamp set to that clock.
+  The scenario starts a fresh playtest, so code changed on disk is loaded too.
 - Input steps (key, text, click, walk_to) and screenshots use client, which defaults to client-1.
   Pass client on a step to drive another client of a running multiplayer_playtest, since the scenario itself only starts solo playtests.
 - After it starts play mode it waits up to 15 seconds for the local character, because input sent before the spawn is lost.

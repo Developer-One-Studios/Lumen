@@ -57,6 +57,7 @@ const RECORD_VIEWPORT: ToolDefinition = {
       frame_width: { type: 'integer', minimum: 64, maximum: 1280, default: 480, description: 'Width of each saved frame in pixels.' },
       sheet_frames: { type: 'integer', minimum: 1, maximum: 48, default: 24, description: 'Frames shown in the returned grid, evenly spaced.' },
       save_frames: { type: 'boolean', default: true, description: 'Save every frame as a PNG in the artifact folder.' },
+      stamp: { type: 'string', description: 'Luau value read in Studio each frame, drawn on the frames.' },
       instance_id: { type: 'string', description: 'Studio process ID when ambiguous.' },
     },
   },
@@ -117,7 +118,11 @@ export const captureFeature: ForkFeature = {
 - Every frame is saved as a PNG in the artifact folder unless save_frames is false, named with its milliseconds since the start, so a moment the grid skipped can be read on its own.
 - It reads the Studio window through the host OS: the X server on Linux, a few milliseconds per frame, and the host capture helper on Windows and macOS, where each frame takes much longer and the frame rate is low.
 - Studio has to be on screen but may sit behind other windows. A minimized Studio window has no pixels, so the call fails and asks for it to be restored.
-- Studio only draws so fast, often about 15 frames a second when it is not focused. distinctFrames and newFramesPerSecond show how many grabs held a new frame, and repeated frames mean Studio drew slower than fps.
+- Studio only draws so fast, often about 15 frames a second when it is not focused. While it records, a frame clock in Studio counts the frames Studio really drew, reported as studioFps, so a repeated grab can be told apart from a still picture. distinctFrames and newFramesPerSecond count grabs that held new pixels.
+- stamp is a Luau expression read in Studio on rendered frames, for example a cutscene sound's TimePosition. Each frame carries the value read last before it was grabbed, numbers are drawn under the time in the grid, and sheet.stamps and frames.json list every value, so frames line up with game time instead of wall time.
+- A stamp must not yield. It runs on the peer that draws the recorded viewport, the playtest client or edit, and stampError reports its first error.
+- sheet.files names the saved file of every tile in the grid, so a tile can be opened at full size, and frames.json lists every frame's file, stamp and timing.
+- Inside playtest_scenario a record step records in the same call as the input, waits and checks that lead up to it, which keeps the gap between a trigger and the recording small.
 - Like the host capture fallback, it shows corner markers in the viewport for one frame to locate it, then hides them before recording.
 `,
 };

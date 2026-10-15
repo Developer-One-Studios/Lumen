@@ -185,6 +185,7 @@ const GLYPHS: Record<string, string[]> = {
   '8': ['###', '#.#', '###', '#.#', '###'],
   '9': ['###', '#.#', '###', '..#', '###'],
   '.': ['...', '...', '...', '...', '.#.'],
+  '-': ['...', '...', '###', '...', '...'],
   s: ['...', '###', '#..', '.##', '##.'],
 };
 
@@ -218,8 +219,47 @@ export function timeLabel(offsetMs: number): string {
   return `${(offsetMs / 1000).toFixed(2)}s`;
 }
 
-/** Tiles frames in reading order, each with its time in the top-left corner. */
-export function buildContactSheet(tiles: Array<{ frame: RgbaFrame; label: string }>, columns: number, tileWidth: number): RgbaFrame {
+/**
+ * What Studio itself reported while a recording ran: when each frame rendered, and a caller's stamp expression read
+ * on those frames. Times are milliseconds after startedUnixMs, which is the host clock both sides share.
+ */
+export interface FrameClock {
+  startedUnixMs: number;
+  /** Render (or Heartbeat) times in ms. */
+  frames: number[];
+  signal: string;
+  stampT: number[];
+  stampV: unknown[];
+  stampError?: string;
+}
+
+/** Frames Studio drew per second while the grabs ran, over the part of the recording the clock covered. */
+export function drawRate(clock: FrameClock, recordStartMs: number, recordEndMs: number): number | undefined {
+  if (clock.frames.length < 2) return undefined;
+  const from = Math.max(recordStartMs, clock.startedUnixMs + clock.frames[0]);
+  const to = Math.min(recordEndMs, clock.startedUnixMs + clock.frames[clock.frames.length - 1]);
+  // Under half the recording covered says more about a late clock than about Studio's frame rate.
+  if (to - from < (recordEndMs - recordStartMs) / 2 || to <= from) return undefined;
+  const inside = clock.frames.filter((ms) => clock.startedUnixMs + ms >= from && clock.startedUnixMs + ms <= to).length;
+  return Math.round(((inside - 1) / ((to - from) / 1000)) * 10) / 10;
+}
+
+/** The stamp Studio last read at or before each grab, or undefined before its first read. */
+export function stampsAt(clock: FrameClock, grabbedAtMs: number[]): unknown[] {
+  let cursor = -1;
+  return grabbedAtMs.map((at) => {
+    while (cursor + 1 < clock.stampT.length && clock.startedUnixMs + clock.stampT[cursor + 1] <= at) cursor++;
+    return cursor >= 0 ? clock.stampV[cursor] : undefined;
+  });
+}
+
+/** A stamp as the grid can draw it: numbers only, since the label font has digits, '.', '-' and 's'. */
+export function stampLabel(value: unknown): string | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : undefined;
+}
+
+/** Tiles frames in reading order, each with its time in the top-left corner and its stamp, when numeric, below it. */
+export function buildContactSheet(tiles: Array<{ frame: RgbaFrame; label: string; stamp?: string }>, columns: number, tileWidth: number): RgbaFrame {
   const gap = 4;
   const first = tiles[0].frame;
   const tileHeight = Math.max(1, Math.round((first.height * tileWidth) / first.width));
@@ -237,6 +277,7 @@ export function buildContactSheet(tiles: Array<{ frame: RgbaFrame; label: string
       shrunk.rgba.copy(sheet.rgba, ((top + y) * width + left) * 4, y * shrunk.width * 4, (y * shrunk.width + Math.min(tileWidth, shrunk.width)) * 4);
     }
     drawLabel(sheet, left, top, tile.label, scale);
+    if (tile.stamp !== undefined) drawLabel(sheet, left, top + 8 * scale, tile.stamp, scale);
   });
   return sheet;
 }

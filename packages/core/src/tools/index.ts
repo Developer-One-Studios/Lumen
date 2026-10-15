@@ -40,18 +40,23 @@ import {
 import type { HostCaptureResult, HostWindowIdentity, ViewportRect } from '../host-capture.js';
 import {
   buildContactSheet,
+  drawRate,
   hostWindowFrameSource,
   openX11FrameSource,
   recordFrames,
   spreadIndices,
+  stampLabel,
+  stampsAt,
   timeLabel,
+  type FrameClock,
   type FrameSource,
   type Recording,
 } from '../viewport-recorder.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { missingInputHint, resolveArtifactReadPath, writeArtifact } from '../artifact-paths.js';
-import { ForkTools, cameraViews, type CameraView, type ForkHost, type PeerTarget } from './fork-tools.js';
+import { ForkTools, cameraViews, luauValue, type CameraView, type ForkHost, type PeerTarget } from './fork-tools.js';
+import { NIL_SAMPLE, explainLuauError, frameClockLuau, userFunction } from './fork/playtest-luau.js';
 
 type RawImageCaptureResponse = {
   success?: boolean;
@@ -191,7 +196,16 @@ export interface RecordViewportOptions {
   frame_width?: unknown;
   sheet_frames?: unknown;
   save_frames?: unknown;
+  /** Luau expression read in Studio on each rendered frame and shown on the frames grabbed after it. */
+  stamp?: unknown;
 }
+
+// The frame clock is asked for before the first grab, so its first frames land before the recording starts.
+const FRAME_CLOCK_LEAD_MS = 200;
+const FRAME_CLOCK_TAIL_MS = 1000;
+const MAX_STAMP_LENGTH = 2000;
+
+type FrameClockReply = { clock?: FrameClock; error?: string };
 
 function boundedNumber(value: unknown, fallback: number, min: number, max: number, name: string, integer = false): number {
   if (value === undefined) return fallback;
@@ -2109,7 +2123,6 @@ export class RobloxStudioTools {
     }
     const deadline = luauDeadline(timeout_s);
     const response = await this._callSingle('/api/execute-luau', { code, timeout_s: deadline }, target || 'edit', instance_id, (deadline + 5) * 1000, undefined, operation_id);
-
     return this._luauReply(code, response);
   }
 
@@ -2129,7 +2142,6 @@ export class RobloxStudioTools {
     }
     const deadline = luauDeadline(timeout_s);
     const response = await this._callSingle('/api/eval-runtime', { code, timeout_s: deadline }, 'server', instance_id, (deadline + 5) * 1000);
-
     return this._luauReply(code, response);
   }
 
@@ -2143,7 +2155,6 @@ export class RobloxStudioTools {
     }
     const deadline = luauDeadline(timeout_s);
     const response = await this._callSingle('/api/eval-runtime', { code, timeout_s: deadline }, clientTarget, instance_id, (deadline + 5) * 1000);
-
     return this._luauReply(code, response);
   }
 
@@ -5589,6 +5600,10 @@ export class RobloxStudioTools {
     const frameWidth = boundedNumber(options.frame_width, 480, 64, 1280, 'frame_width', true);
     const sheetFrames = boundedNumber(options.sheet_frames, 24, 1, 48, 'sheet_frames', true);
     const saveFrames = options.save_frames !== false;
+    const stamp = options.stamp;
+    if (stamp !== undefined && (typeof stamp !== 'string' || stamp.trim() === '' || stamp.length > MAX_STAMP_LENGTH)) {
+      throw new Error(`stamp must be a Luau expression of at most ${MAX_STAMP_LENGTH} characters`);
+    }
 
     const refresh = this.bridge.refreshTopologyForRouting();
     if (refresh) await refresh;
@@ -5605,6 +5620,7 @@ export class RobloxStudioTools {
     let recording!: Recording;
     let viewport!: ViewportRect;
     let finishError: string | undefined;
+    let clockReply: Promise<FrameClockReply> | undefined;
     try {
       prepared = await this._callViewportMarkers('prepare', role, instanceId);
       if (prepared.error || !prepared.captureId || !prepared.viewportWidth || !prepared.viewportHeight) {
@@ -5639,6 +5655,9 @@ export class RobloxStudioTools {
             `${MAX_RECORDING_BYTES / 1048576} MB limit. Lower fps, duration_s or frame_width.`,
         );
       }
+      // Studio's own clock runs beside the grabs: when it really drew, and what the stamp read on those frames.
+      clockReply = this._frameClock(role, instanceId, durationS * 1000 + FRAME_CLOCK_LEAD_MS + FRAME_CLOCK_TAIL_MS, 1000 / fps / 2, stamp);
+      await new Promise((resolve) => setTimeout(resolve, FRAME_CLOCK_LEAD_MS));
       recording = await recordFrames({ source, rect: viewport, fps, durationMs: durationS * 1000, width: size.width, height: size.height });
     } finally {
       if (prepared?.captureId) {
@@ -5654,28 +5673,56 @@ export class RobloxStudioTools {
 
     const { frames } = recording;
     const first = frames[0];
-    const spanS = (frames[frames.length - 1].offsetMs - first.offsetMs) / 1000;
+    const last = frames[frames.length - 1];
+    const spanS = (last.offsetMs - first.offsetMs) / 1000;
     const round = (value: number) => Math.round(value * 100) / 100;
     const distinct = frames.filter((frame) => !frame.repeat).length;
+
+    const clocked = clockReply ? await clockReply : { error: 'the recording never started' };
+    const studioFps = clocked.clock ? drawRate(clocked.clock, first.unixMs, last.unixMs) : undefined;
+    const stamps = clocked.clock && stamp !== undefined ? stampsAt(clocked.clock, frames.map((frame) => frame.unixMs)) : undefined;
+    const fileName = (index: number) => `frame-${String(index + 1).padStart(4, '0')}-${Math.round(frames[index].offsetMs)}ms.png`;
 
     let folder: string | undefined;
     if (saveFrames) {
       const base = `recordings/${new Date(first.unixMs).toISOString().replace(/[:.]/g, '-')}`;
       frames.forEach((entry, index) => {
-        const name = `${base}/frame-${String(index + 1).padStart(4, '0')}-${Math.round(entry.offsetMs)}ms.png`;
-        const written = writeArtifact(name, rgbaToPng(entry.frame.rgba, entry.frame.width, entry.frame.height));
+        const written = writeArtifact(`${base}/${fileName(index)}`, rgbaToPng(entry.frame.rgba, entry.frame.width, entry.frame.height));
         folder ??= path.dirname(written);
       });
       writeArtifact(`${base}/frames.json`, JSON.stringify({
         startedAt: new Date(first.unixMs).toISOString(),
-        frames: frames.map((entry, index) => ({ frame: index + 1, offsetMs: Math.round(entry.offsetMs), unixMs: entry.unixMs, repeat: entry.repeat })),
+        ...(studioFps !== undefined ? { studioFps } : {}),
+        frames: frames.map((entry, index) => ({
+          frame: index + 1,
+          file: fileName(index),
+          offsetMs: Math.round(entry.offsetMs),
+          unixMs: entry.unixMs,
+          repeat: entry.repeat,
+          ...(stamps ? { stamp: stamps[index] ?? null } : {}),
+        })),
       }, null, 2));
     }
 
     const picks = spreadIndices(frames.length, sheetFrames);
     const columns = picks.length <= 4 ? picks.length : picks.length <= 12 ? 4 : 6;
     const tileWidth = Math.min(first.frame.width, Math.floor((MAX_SHEET_WIDTH - (columns + 1) * 4) / columns));
-    const sheet = buildContactSheet(picks.map((index) => ({ frame: frames[index].frame, label: timeLabel(frames[index].offsetMs) })), columns, tileWidth);
+    const sheet = buildContactSheet(picks.map((index) => ({
+      frame: frames[index].frame,
+      label: timeLabel(frames[index].offsetMs),
+      stamp: stamps ? stampLabel(stamps[index]) : undefined,
+    })), columns, tileWidth);
+
+    // Repeated grabs mean either that Studio drew slower than fps or that the picture held still, and only the
+    // frame clock can tell those apart.
+    let note: string | undefined;
+    if (studioFps !== undefined && studioFps < fps * 0.9) {
+      note = `Studio drew about ${studioFps} frames a second, below the ${fps} grabs asked for, so some frames repeat. Studio draws slower when it is not focused.`;
+    } else if (distinct < frames.length) {
+      note = studioFps !== undefined
+        ? `Studio drew about ${studioFps} frames a second, so repeated frames are a still picture, not missed draws.`
+        : 'Repeated frames are ticks where Studio had not drawn a new frame yet, so Studio drew slower than fps.';
+    }
 
     const summary = {
       frames: frames.length,
@@ -5689,9 +5736,19 @@ export class RobloxStudioTools {
       frameSize: { width: first.frame.width, height: first.frame.height },
       ...(recording.lateTicks > 0 ? { lateTicks: recording.lateTicks } : {}),
       ...(recording.stoppedEarly ? { stoppedEarly: recording.stoppedEarly } : {}),
-      ...(folder ? { folder, files: 'frame-<n>-<ms since start>ms.png per frame, and frames.json' } : {}),
-      sheet: { frames: picks.length, columns, timesS: picks.map((index) => round(frames[index].offsetMs / 1000)) },
-      ...(distinct < frames.length ? { note: 'Repeated frames are ticks where Studio had not drawn a new frame yet, so Studio drew slower than fps.' } : {}),
+      ...(studioFps !== undefined ? { studioFps } : {}),
+      ...(clocked.clock && clocked.clock.signal !== 'RenderStepped' ? { studioClock: clocked.clock.signal } : {}),
+      ...(clocked.error ? { frameClockError: clocked.error } : {}),
+      ...(clocked.clock?.stampError ? { stampError: clocked.clock.stampError } : {}),
+      ...(folder ? { folder, files: 'frames.json lists every frame file, sheet.files the ones in the grid' } : {}),
+      sheet: {
+        frames: picks.length,
+        columns,
+        timesS: picks.map((index) => round(frames[index].offsetMs / 1000)),
+        ...(saveFrames ? { files: picks.map(fileName) } : {}),
+        ...(stamps ? { stamps: picks.map((index) => stamps[index] ?? null) } : {}),
+      },
+      ...(note ? { note } : {}),
       ...(finishError ? { warning: `could not restore the Studio viewport: ${finishError}` } : {}),
     };
     return {
@@ -5700,6 +5757,42 @@ export class RobloxStudioTools {
         { type: 'image', data: rgbaToJpeg(sheet.rgba, sheet.width, sheet.height, 85).toString('base64'), mimeType: 'image/jpeg' },
       ],
     };
+  }
+
+  /** Runs Studio's frame clock on the peer that draws the recorded viewport. It reports a failure instead of throwing. */
+  private async _frameClock(role: string, instanceId: string, durationMs: number, gapMs: number, stamp: string | undefined): Promise<FrameClockReply> {
+    try {
+      const peers = await this.forkHost.peerTargets(role, instanceId);
+      if (peers.length !== 1) return { error: `found ${peers.length} ${role} peers to read the frame clock from` };
+      const chunk = frameClockLuau(stamp !== undefined ? userFunction('stamp', stamp) : undefined, { duration_ms: Math.round(durationMs), gap_ms: gapMs });
+      const reply = await this.forkHost.requestPeer(
+        '/api/execute-luau',
+        { code: chunk.code, timeout_s: Math.ceil(durationMs / 1000) + 10 },
+        peers[0].peerId,
+        durationMs + 30_000,
+      );
+      let value: Record<string, unknown>;
+      try {
+        value = luauValue(reply);
+      } catch (error) {
+        return { error: explainLuauError(errorMessage(error), chunk.ranges) };
+      }
+      const numbers = (raw: unknown) => (Array.isArray(raw) ? raw.filter((item): item is number => typeof item === 'number') : []);
+      const startedUnixMs = value.started_unix_ms;
+      if (typeof startedUnixMs !== 'number') return { error: 'the frame clock returned no start time' };
+      return {
+        clock: {
+          startedUnixMs,
+          frames: numbers(value.frames),
+          signal: typeof value.signal === 'string' ? value.signal : 'RenderStepped',
+          stampT: numbers(value.stamp_t),
+          stampV: Array.isArray(value.stamp_v) ? value.stamp_v.map((item) => (item === NIL_SAMPLE ? null : item)) : [],
+          ...(typeof value.stamp_error === 'string' ? { stampError: explainLuauError(value.stamp_error, chunk.ranges) } : {}),
+        },
+      };
+    } catch (error) {
+      return { error: errorMessage(error) };
+    }
   }
 
   /**

@@ -172,6 +172,58 @@ return { returned = results.n > 0, value = render(results[1]) }
 `, {});
 }
 
+/**
+ * Notes when each frame renders for duration_ms, and reads the stamp expression on frames at least gap_ms apart.
+ * RenderStepped only exists where Studio draws, so a peer without it falls back to Heartbeat and says so.
+ */
+export function frameClockLuau(stamp: UserFunction | undefined, args: { duration_ms: number; gap_ms: number }): LuauChunk {
+  return chunk(stamp ? [stamp] : [], String.raw`
+local RunService = game:GetService("RunService")
+local MAX_FRAMES = 20000
+local startedUnix = DateTime.now().UnixTimestampMillis
+local started = os.clock()
+local frames, stampT, stampV = {}, {}, {}
+local stampError
+local lastStamp = -math.huge
+
+local function stampValue(value)
+	local kind = typeof(value)
+	if kind == "number" then return if finite(value) then round(value, 3) else tostring(value) end
+	if kind == "boolean" then return value end
+	-- An array cannot hold nil, so it is stored as the sentinel to keep stamp_t and stamp_v aligned.
+	if kind == "nil" then return "${NIL_SAMPLE}" end
+	if kind == "string" then return clip(value, 40) end
+	return clip(tostring(value), 40)
+end
+
+local function onFrame()
+	local ms = (os.clock() - started) * 1000
+	if #frames < MAX_FRAMES then table.insert(frames, round(ms, 1)) end
+	if ARGS.has_stamp and ms - lastStamp >= ARGS.gap_ms then
+		lastStamp = ms
+		-- Read on the frame itself, so a stamp that yields is reported rather than stalling the clock.
+		local ok, value = pcall(USER[1])
+		if ok then
+			table.insert(stampT, round(ms, 1))
+			table.insert(stampV, stampValue(value))
+		elseif stampError == nil then
+			stampError = reason(value)
+		end
+	end
+end
+
+local signal = "RenderStepped"
+local connected, connection = pcall(function() return RunService.RenderStepped:Connect(onFrame) end)
+if not connected then
+	signal = "Heartbeat"
+	connection = RunService.Heartbeat:Connect(onFrame)
+end
+task.wait(ARGS.duration_ms / 1000)
+connection:Disconnect()
+return { started_unix_ms = startedUnix, frames = frames, signal = signal, stamp_t = stampT, stamp_v = stampV, stamp_error = stampError }
+`, { ...args, has_stamp: stamp !== undefined });
+}
+
 /** Samples every expression each interval_ms for duration_ms, and spawns action right after the first sample. */
 export function watchLuau(expressions: UserFunction[], action: UserFunction | undefined, args: { names: string[]; duration_ms: number; interval_ms: number }): LuauChunk {
   return chunk(action ? [...expressions, action] : expressions, String.raw`

@@ -8,12 +8,16 @@ import { RobloxStudioTools } from '../tools/index.js';
 import { StudioHttpClient } from '../tools/studio-client.js';
 import {
   buildContactSheet,
+  drawRate,
   hostWindowFrameSource,
   openX11FrameSource,
   recordFrames,
   shrinkFrame,
   spreadIndices,
+  stampLabel,
+  stampsAt,
   timeLabel,
+  type FrameClock,
   type FrameSource,
   type SourceFrame,
 } from '../viewport-recorder.js';
@@ -382,6 +386,30 @@ describe('recording', () => {
   });
 });
 
+describe('frame clock', () => {
+  const clock = (overrides: Partial<FrameClock> = {}): FrameClock => ({
+    startedUnixMs: 1000,
+    frames: Array.from({ length: 31 }, (_, index) => index * 100),
+    signal: 'RenderStepped',
+    stampT: [0, 500, 1500],
+    stampV: [0, 'half', 1.5],
+    ...overrides,
+  });
+
+  test('draw rate counts frames inside the recording window only', () => {
+    expect(drawRate(clock(), 1000, 3000)).toBe(10);
+    expect(drawRate(clock(), 3500, 9000)).toBeUndefined();
+    expect(drawRate(clock({ frames: [0] }), 1000, 2000)).toBeUndefined();
+  });
+
+  test('each grab carries the last stamp read before it, and only numbers are drawn', () => {
+    expect(stampsAt(clock(), [900, 1000, 1499, 1500, 2600])).toEqual([undefined, 0, 0, 'half', 1.5]);
+    expect(stampLabel(17.456)).toBe('17.46');
+    expect(stampLabel('half')).toBeUndefined();
+    expect(stampLabel(Number.NaN)).toBeUndefined();
+  });
+});
+
 describe('record_viewport', () => {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
 
@@ -417,10 +445,11 @@ describe('record_viewport', () => {
     return { width, height, rgba };
   }
 
-  function makeTools(source: FrameSource, markerActions: string[], shown: { value: boolean }) {
+  function makeTools(source: FrameSource, markerActions: string[], shown: { value: boolean }, clock?: (code: string) => unknown) {
     const bridge = new BridgeService();
     bridge.registerPeer({ peerId: 'edit-session', transportPeerId: 'edit-session', instanceId: 'instance:test', role: 'edit', placeId: 0, placeName: 'Arena', dataModelName: 'Arena', isRunning: false });
-    jest.spyOn(StudioHttpClient.prototype, 'request').mockImplementation((async (endpoint: string, data: { action: string }) => {
+    jest.spyOn(StudioHttpClient.prototype, 'request').mockImplementation((async (endpoint: string, data: { action: string; code?: string }) => {
+      if (endpoint === '/api/execute-luau' && clock) return clock(data.code ?? '');
       if (endpoint !== '/api/capture-markers') throw new Error(`unexpected ${endpoint}`);
       markerActions.push(data.action);
       if (data.action === 'show') shown.value = true;
@@ -465,6 +494,55 @@ describe('record_viewport', () => {
     expect(JSON.parse(fs.readFileSync(path.join(summary.folder, 'frames.json'), 'utf8')).frames).toHaveLength(5);
     expect(result.content[1]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
     expect(closed).toBe(true);
+  });
+
+  test('Studio frame clock gives the real draw rate, stamps every frame and names the grid files', async () => {
+    const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'recording-'));
+    jest.replaceProperty(process, 'env', { ...process.env, ROBLOX_STUDIO_HOST_CAPTURE: '1', ROBLOX_MCP_ARTIFACT_DIR: artifacts });
+    const shown = { value: false };
+    const codes: string[] = [];
+    const source: FrameSource = {
+      grabWindow: async () => windowFrame(shown.value),
+      grabRect: async (rect) => ({ width: rect.width, height: rect.height, data: Buffer.alloc(rect.width * rect.height * 4, 9), layout: { r: 0, g: 1, b: 2 } }),
+      close: () => undefined,
+    };
+    // A still picture: every grab repeats, while Studio says it drew 60 frames a second the whole time.
+    const tools = makeTools(source, [], shown, (code) => {
+      codes.push(code);
+      const start = Date.now() - 100;
+      const frames = Array.from({ length: 120 }, (_, index) => index * (1000 / 60));
+      return { success: true, returnValue: JSON.stringify({ started_unix_ms: start, frames, signal: 'RenderStepped', stamp_t: frames, stamp_v: frames.map((ms) => Math.round(ms) / 1000), stamp_error: null }) };
+    });
+
+    const result = await tools.recordViewport('instance:test', { duration_s: 0.5, fps: 10, frame_width: 64, sheet_frames: 3, stamp: 'workspace.Take.TimePosition' });
+    const summary = JSON.parse((result.content[0] as { text: string }).text);
+    expect(codes).toHaveLength(1);
+    expect(codes[0]).toContain('workspace.Take.TimePosition');
+    expect(summary.studioFps).toBeGreaterThan(55);
+    expect(summary.note).toContain('still picture');
+    expect(summary.sheet.files).toHaveLength(3);
+    expect(summary.sheet.files[0]).toMatch(/^frame-0001-\d+ms\.png$/);
+    expect(summary.sheet.stamps.every((value: unknown) => typeof value === 'number')).toBe(true);
+    const saved = JSON.parse(fs.readFileSync(path.join(summary.folder, 'frames.json'), 'utf8'));
+    expect(saved.frames[0]).toMatchObject({ file: summary.sheet.files[0], stamp: expect.any(Number) });
+    expect(fs.existsSync(path.join(summary.folder, summary.sheet.files[2]))).toBe(true);
+  });
+
+  test('a frame clock that fails still returns the recording, with the reason', async () => {
+    jest.replaceProperty(process, 'env', { ...process.env, ROBLOX_STUDIO_HOST_CAPTURE: '1' });
+    const shown = { value: false };
+    const source: FrameSource = {
+      grabWindow: async () => windowFrame(shown.value),
+      grabRect: async (rect) => ({ width: rect.width, height: rect.height, data: Buffer.alloc(rect.width * rect.height * 4, 9), layout: { r: 0, g: 1, b: 2 } }),
+      close: () => undefined,
+    };
+    const tools = makeTools(source, [], shown, () => ({ success: false, error: 'stamp:1: attempt to index nil' }));
+    const result = await tools.recordViewport('instance:test', { duration_s: 0.5, fps: 10, frame_width: 64, save_frames: false, stamp: 'nope.x' });
+    const summary = JSON.parse((result.content[0] as { text: string }).text);
+    expect(summary.frames).toBe(5);
+    expect(summary.frameClockError).toContain('attempt to index nil');
+    expect(summary.studioFps).toBeUndefined();
+    await expect(tools.recordViewport('instance:test', { stamp: '' })).rejects.toThrow('stamp must be a Luau expression');
   });
 
   test('a failure while locating the viewport still hides the markers and ends the transaction', async () => {
