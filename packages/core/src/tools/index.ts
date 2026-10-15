@@ -38,6 +38,16 @@ import {
   prepareHostWindowCapture,
 } from '../host-capture.js';
 import type { HostCaptureResult, HostWindowIdentity, ViewportRect } from '../host-capture.js';
+import {
+  buildContactSheet,
+  hostWindowFrameSource,
+  openX11FrameSource,
+  recordFrames,
+  spreadIndices,
+  timeLabel,
+  type FrameSource,
+  type Recording,
+} from '../viewport-recorder.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { missingInputHint, resolveArtifactReadPath, writeArtifact } from '../artifact-paths.js';
@@ -170,6 +180,26 @@ type StudioToolResponse = Record<string, unknown> & {
 };
 
 const MAX_INLINE_IMAGE_BYTES = 6_000_000;
+// The plugin ends a marker transaction on its own after 60 s, and a recording holds one open.
+const MAX_RECORD_SECONDS = 30;
+const MAX_RECORDING_BYTES = 256 * 1024 * 1024;
+const MAX_SHEET_WIDTH = 1600;
+
+export interface RecordViewportOptions {
+  duration_s?: unknown;
+  fps?: unknown;
+  frame_width?: unknown;
+  sheet_frames?: unknown;
+  save_frames?: unknown;
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number, name: string, integer = false): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+    throw new Error(`${name} must be ${integer ? 'a whole number' : 'a number'} from ${min} to ${max}.`);
+  }
+  return value;
+}
 const MAX_MATRIX_IMAGE_BYTES = 8_000_000;
 const MAX_SCREENSHOTS_PER_CALL = 12;
 const DEFAULT_ASSET_AUDIO_PREVIEWS = 3;
@@ -1064,6 +1094,9 @@ export class RobloxStudioTools {
   private managedConnectionAssociations: Promise<void> = Promise.resolve();
   private unsubscribePeerRegistered: () => void;
   private hostWindowCapture: HostWindowCaptureFn = captureStudioWindow;
+  // Injection seam so tests can stand in for the frames record_viewport reads.
+  private openRecordingSource: (titleHint?: string) => Promise<FrameSource> = async (titleHint) =>
+    process.platform === 'linux' ? openX11FrameSource(titleHint) : hostWindowFrameSource(this.hostWindowCapture, titleHint);
   private hostViewportRects = new Map<string, HostViewportRectCacheEntry>();
   private viewportCaptureQueues = new Map<string, Promise<void>>();
   readonly fork: ForkTools;
@@ -5538,6 +5571,129 @@ export class RobloxStudioTools {
       nativeWidth: viewportWidth,
       nativeHeight: viewportHeight,
       data: cropped.rgba.toString('base64'),
+    };
+  }
+
+  /**
+   * Records the viewport input tools target for a while, read through the host window the way the host capture fallback
+   * crops a screenshot: corner markers locate the viewport once, then every frame reads that rectangle.
+   */
+  async recordViewport(instance_id?: string, options: RecordViewportOptions = {}) {
+    const durationS = boundedNumber(options.duration_s, 5, 0.5, MAX_RECORD_SECONDS, 'duration_s');
+    const fps = boundedNumber(options.fps, 15, 1, 30, 'fps', true);
+    const frameWidth = boundedNumber(options.frame_width, 480, 64, 1280, 'frame_width', true);
+    const sheetFrames = boundedNumber(options.sheet_frames, 24, 1, 48, 'sheet_frames', true);
+    const saveFrames = options.save_frames !== false;
+
+    const refresh = this.bridge.refreshTopologyForRouting();
+    if (refresh) await refresh;
+    const { instanceId, clientRole } = this._resolveRuntime(instance_id);
+    const role = clientRole ?? 'edit';
+    if (isHostCaptureDisabled()) {
+      throw new Error('record_viewport reads the Studio window through the host OS, which ROBLOX_STUDIO_HOST_CAPTURE turns off.');
+    }
+    if (!isHostCaptureSupported()) throw new Error(`record_viewport cannot read the Studio window here: ${hostCaptureUnsupportedReason()}.`);
+    if (this.hostWindowCapture === captureStudioWindow) await prepareHostWindowCapture();
+
+    const source = await this.openRecordingSource(this._hostCaptureTitleHint(instanceId));
+    let prepared: ViewportMarkerResponse | undefined;
+    let recording!: Recording;
+    let viewport!: ViewportRect;
+    let finishError: string | undefined;
+    try {
+      prepared = await this._callViewportMarkers('prepare', role, instanceId);
+      if (prepared.error || !prepared.captureId || !prepared.viewportWidth || !prepared.viewportHeight) {
+        throw new Error(prepared.error ?? 'the Studio plugin could not prepare host capture (update the plugin)');
+      }
+      const shown = await this._callViewportMarkers('show', role, instanceId, prepared.captureId);
+      if (shown.error) throw new Error(`could not draw viewport markers: ${shown.error}`);
+      let marked: RgbaFrame | undefined;
+      let grabError: unknown;
+      try {
+        marked = await source.grabWindow();
+      } catch (error) {
+        grabError = error;
+      }
+      const hidden = await this._callViewportMarkers('hide', role, instanceId, prepared.captureId);
+      if (grabError !== undefined || !marked) throw grabError;
+      if (hidden.error) throw new Error(`could not hide viewport markers: ${hidden.error}`);
+
+      const located = findViewportRect(marked.rgba, marked.width, marked.height, {
+        viewportWidth: shown.viewportWidth ?? prepared.viewportWidth,
+        viewportHeight: shown.viewportHeight ?? prepared.viewportHeight,
+        markerSize: shown.markerSize ?? 12,
+      });
+      if ('error' in located) throw new Error(`could not find the viewport in the Studio window: ${located.error}`);
+      viewport = located.rect;
+      const size = fitWidth(viewport.width, viewport.height, frameWidth);
+      const planned = Math.max(1, Math.floor(durationS * fps));
+      const bytes = planned * size.width * size.height * 4;
+      if (bytes > MAX_RECORDING_BYTES) {
+        throw new Error(
+          `${planned} frames of ${size.width}x${size.height} need ${Math.ceil(bytes / 1048576)} MB, over the ` +
+            `${MAX_RECORDING_BYTES / 1048576} MB limit. Lower fps, duration_s or frame_width.`,
+        );
+      }
+      recording = await recordFrames({ source, rect: viewport, fps, durationMs: durationS * 1000, width: size.width, height: size.height });
+    } finally {
+      if (prepared?.captureId) {
+        try {
+          const restored = await this._callViewportMarkers('finish', role, instanceId, prepared.captureId);
+          if (restored.error) finishError = restored.error;
+        } catch (error) {
+          finishError = errorMessage(error);
+        }
+      }
+      source.close();
+    }
+
+    const { frames } = recording;
+    const first = frames[0];
+    const spanS = (frames[frames.length - 1].offsetMs - first.offsetMs) / 1000;
+    const round = (value: number) => Math.round(value * 100) / 100;
+    const distinct = frames.filter((frame) => !frame.repeat).length;
+
+    let folder: string | undefined;
+    if (saveFrames) {
+      const base = `recordings/${new Date(first.unixMs).toISOString().replace(/[:.]/g, '-')}`;
+      frames.forEach((entry, index) => {
+        const name = `${base}/frame-${String(index + 1).padStart(4, '0')}-${Math.round(entry.offsetMs)}ms.png`;
+        const written = writeArtifact(name, rgbaToPng(entry.frame.rgba, entry.frame.width, entry.frame.height));
+        folder ??= path.dirname(written);
+      });
+      writeArtifact(`${base}/frames.json`, JSON.stringify({
+        startedAt: new Date(first.unixMs).toISOString(),
+        frames: frames.map((entry, index) => ({ frame: index + 1, offsetMs: Math.round(entry.offsetMs), unixMs: entry.unixMs, repeat: entry.repeat })),
+      }, null, 2));
+    }
+
+    const picks = spreadIndices(frames.length, sheetFrames);
+    const columns = picks.length <= 4 ? picks.length : picks.length <= 12 ? 4 : 6;
+    const tileWidth = Math.min(first.frame.width, Math.floor((MAX_SHEET_WIDTH - (columns + 1) * 4) / columns));
+    const sheet = buildContactSheet(picks.map((index) => ({ frame: frames[index].frame, label: timeLabel(frames[index].offsetMs) })), columns, tileWidth);
+
+    const summary = {
+      frames: frames.length,
+      distinctFrames: distinct,
+      fps,
+      ...(spanS > 0 ? { capturedFps: round((frames.length - 1) / spanS), newFramesPerSecond: round((distinct - 1) / spanS) } : {}),
+      startedAt: new Date(first.unixMs).toISOString(),
+      startedAtUnixMs: first.unixMs,
+      durationS: round(spanS),
+      viewport: { width: viewport.width, height: viewport.height },
+      frameSize: { width: first.frame.width, height: first.frame.height },
+      ...(recording.lateTicks > 0 ? { lateTicks: recording.lateTicks } : {}),
+      ...(recording.stoppedEarly ? { stoppedEarly: recording.stoppedEarly } : {}),
+      ...(folder ? { folder, files: 'frame-<n>-<ms since start>ms.png per frame, and frames.json' } : {}),
+      sheet: { frames: picks.length, columns, timesS: picks.map((index) => round(frames[index].offsetMs / 1000)) },
+      ...(distinct < frames.length ? { note: 'Repeated frames are ticks where Studio had not drawn a new frame yet, so Studio drew slower than fps.' } : {}),
+      ...(finishError ? { warning: `could not restore the Studio viewport: ${finishError}` } : {}),
+    };
+    return {
+      content: [
+        { type: 'text', text: JSON.stringify(summary) },
+        { type: 'image', data: rgbaToJpeg(sheet.rgba, sheet.width, sheet.height, 85).toString('base64'), mimeType: 'image/jpeg' },
+      ],
     };
   }
 

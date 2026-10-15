@@ -43,10 +43,30 @@ const CAPTURE_VIEWS: ToolDefinition = {
   },
 };
 
+// Reads the Studio window, not the place, but draws corner markers in the viewport while it locates it.
+const RECORD_VIEWPORT: ToolDefinition = {
+  name: 'record_viewport',
+  category: 'read',
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  description: 'Use to record the viewport for a few seconds and see timestamped frames, to judge motion, timing and transitions.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      duration_s: { type: 'number', minimum: 0.5, maximum: 30, default: 5, description: 'Seconds to record, 0.5 to 30.' },
+      fps: { type: 'integer', minimum: 1, maximum: 30, default: 15, description: 'Frames per second to grab, 1 to 30.' },
+      frame_width: { type: 'integer', minimum: 64, maximum: 1280, default: 480, description: 'Width of each saved frame in pixels.' },
+      sheet_frames: { type: 'integer', minimum: 1, maximum: 48, default: 24, description: 'Frames shown in the returned grid, evenly spaced.' },
+      save_frames: { type: 'boolean', default: true, description: 'Save every frame as a PNG in the artifact folder.' },
+      instance_id: { type: 'string', description: 'Studio process ID when ambiguous.' },
+    },
+  },
+};
+
 export const captureFeature: ForkFeature = {
   name: 'capture',
-  definitions: [CAPTURE_VIEWS],
+  definitions: [CAPTURE_VIEWS, RECORD_VIEWPORT],
   handlers: {
+    record_viewport: async (tools, body) => tools.fork.serializeCapture(() => tools.recordViewport(body.instance_id as string | undefined, body)),
     capture_views: async (tools, body) => {
       if (body.views === undefined) throw new Error('views is required, for example [{"camera_position": [0, 50, 0], "look_at": [0, 0, 0]}]');
       return tools.fork.serializeCapture(() => tools.captureScreenshot(
@@ -65,6 +85,10 @@ export const captureFeature: ForkFeature = {
     {
       tools: ['capture_views'],
       text: 'Use capture_views to shoot from given camera positions, since capture_screenshot never moves the camera.',
+    },
+    {
+      tools: ['record_viewport'],
+      text: 'Use record_viewport to see motion over time, such as a cutscene, a transition or an effect, which a single screenshot cannot show.',
     },
   ],
   guide: `## Screenshots and camera views
@@ -85,5 +109,15 @@ export const captureFeature: ForkFeature = {
 - JPEG quality drops on busy frames to fit that budget, and a PNG over its share is refused, so use max_width when shooting several views.
 - With StreamingEnabled a client only has the parts streamed in around its character, so a distant client camera view can look empty while the edit view shows the parts.
 - Captures are serialized against each other, but other tools that move the camera at the same time still end up in the shot.
+
+## Recording the viewport
+
+- record_viewport grabs the viewport that input tools target fps times a second for duration_s and returns a grid of evenly spaced frames, each labelled with its seconds since the start, plus timing in JSON.
+- Start it right after triggering what you want to watch, for example in the same turn as the input or eval call that starts a cutscene. startedAtUnixMs lines frames up with log timestamps, which are Unix seconds.
+- Every frame is saved as a PNG in the artifact folder unless save_frames is false, named with its milliseconds since the start, so a moment the grid skipped can be read on its own.
+- It reads the Studio window through the host OS: the X server on Linux, a few milliseconds per frame, and the host capture helper on Windows and macOS, where each frame takes much longer and the frame rate is low.
+- Studio has to be on screen but may sit behind other windows. A minimized Studio window has no pixels, so the call fails and asks for it to be restored.
+- Studio only draws so fast, often about 15 frames a second when it is not focused. distinctFrames and newFramesPerSecond show how many grabs held a new frame, and repeated frames mean Studio drew slower than fps.
+- Like the host capture fallback, it shows corner markers in the viewport for one frame to locate it, then hides them before recording.
 `,
 };

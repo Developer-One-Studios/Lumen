@@ -220,7 +220,7 @@ under Wine.
 | `ROBLOX_STUDIO_AUTH_TOKEN` | Auto-generated token file | Explicit shared secret that overrides the token file. |
 | `ROBLOX_STUDIO_NO_AUTH` | Unset | Set to `1` or `true` to disable HTTP tool authentication. This is not recommended. |
 | `ROBLOX_STUDIO_ALLOWED_ORIGINS` | None | Comma-separated browser origins allowed to call the HTTP API cross-origin. |
-| `ROBLOX_STUDIO_HOST_CAPTURE` | Unset | Set to `0`, `false`, or `off` to disable the host window capture fallback for `capture_screenshot`. |
+| `ROBLOX_STUDIO_HOST_CAPTURE` | Unset | Set to `0`, `false`, or `off` to disable reading the Studio window through the host OS, used by the `capture_screenshot` fallback and by `record_viewport`. |
 | `ROBLOX_OPEN_CLOUD_API_KEY` | None | Roblox Open Cloud key used by features such as audio preview, place version access, and monetization. Required permissions depend on the tool. |
 | `ROBLOX_OPEN_CLOUD_API_KEY_FILE` | Unset | File holding the Open Cloud key, read at startup when `ROBLOX_OPEN_CLOUD_API_KEY` is unset, so the key stays out of process listings and client configs. |
 | `ROBLOX_STUDIO_LOG_DIR` | Studio's log folder | Folder `get_playtest_logs` reads Studio's log files from. Found on its own on Windows, macOS, WSL and in Vinegar or Wine prefixes. |

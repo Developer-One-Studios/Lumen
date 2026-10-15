@@ -211,6 +211,20 @@ On a client the view is held every frame and put back whenever a game script mov
 A view that still drifted carries a warning.
 It is not offered in the read only Inspector edition, because it moves the camera.
 
+### `record_viewport`
+
+Records the viewport that input tools target for a few seconds and returns a grid of evenly spaced frames, each labelled with its time since the start.
+
+- `duration_s`: 0.5 to 30 seconds, 5 by default.
+- `fps`: 1 to 30 grabs a second, 15 by default.
+- `frame_width`: width of each saved frame, 480 by default.
+- `sheet_frames`: how many frames the grid shows, 24 by default.
+- `save_frames`: every frame is saved as a PNG in the artifact folder unless this is false.
+
+It reads the Studio window through the host OS, like the screenshot fallback: straight from the X server on Linux, a few milliseconds a frame, and through the host capture helper on Windows and macOS, where the frame rate is low.
+Studio may sit behind other windows but must not be minimized, since a minimized window has no pixels.
+`distinctFrames` and `newFramesPerSecond` show how often Studio drew a new frame, which is often about 15 a second when Studio is not focused.
+
 ## Rojo
 
 ### `resolve_source`
