@@ -1,6 +1,6 @@
 # Lumen releases
 
-## 1.0.1
+## 1.1.0
 
 Based on robloxstudio-mcp 3.2.1.
 

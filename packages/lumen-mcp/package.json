@@ -1,6 +1,6 @@
 {
   "name": "lumen-mcp",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "description": "Lumen: an MCP server that gives AI agents full control of Roblox Studio, plus tools to test, profile and debug games",
   "main": "dist/index.js",
