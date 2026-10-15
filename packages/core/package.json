@@ -1,6 +1,6 @@
 {
   "name": "lumen-mcp-core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Shared core of the Lumen MCP server and its Roblox Studio plugin",
   "type": "module",

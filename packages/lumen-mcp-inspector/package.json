@@ -1,6 +1,6 @@
 {
   "name": "lumen-mcp-inspector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Lumen Inspector: the read-only edition of Lumen for inspecting Roblox Studio",
   "main": "dist/index.js",

@@ -1,5 +1,44 @@
 # Lumen releases
 
+## 1.0.1
+
+Based on robloxstudio-mcp 3.2.1.
+
+### New tools
+
+- `copy_instances` copies instances from one open place into another, or within one, without a file, and `move_instances` moves or turns Models, parts and Folders. Each lands as one undo step.
+- `diff_instances` compares two instance trees, in one place or across two open places, by instances, classes, properties and attributes.
+- `export_scripts` writes a script tree to disk as Rojo files.
+- `record_viewport` records the viewport for a few seconds and returns a grid of timestamped frames. A frame clock in Studio reports how many frames Studio really drew, `stamp` draws a Luau value such as a sound's `TimePosition` on every frame, and `playtest_scenario` has a `record` step.
+- `get_playtest_logs` reads the output of playtests that already ended from Studio's log files.
+
+### Changed tools
+
+- A role-suffixed `instance_id` such as `instance:…-client-2` selects that peer in every tool that takes `target`, Lumen's own tools included, where some tools used to run on client-1 or the server. A contradicting `target` fails with `ambiguous_target`.
+- `get_errors` takes `exclude` to drop noisy messages, such as asset permission errors, before grouping.
+- `execute_luau`, the eval tools, `get_errors`, `playtest_scenario`, `record_viewport`, `wait_for` and `watch` load upfront in clients that hide tools behind a search, and Luau that waits inside a loop gets a hint to use `wait_for` or `watch` instead.
+- Stopping a playtest reports success when the reply to the stop request is lost but every server and client disconnects.
+- `capture_screenshot`, simulated input and `selection` `action=view` use the playtest client when no edit DataModel is connected.
+- `import_rbxm` reads relative paths from the artifact folder, where `export_rbxm` writes them.
+
+### Fixes
+
+- Playtests in places with Server Authority (`NextGenerationReplication`) connect and stop again. The plugin used to fail with "Attribute string value exceeds 50 character limit".
+- Rojo file locations use forward slashes on every OS.
+
+### Security
+
+- On Windows, a symlink planted at an artifact's name inside `ROBLOX_MCP_ARTIFACT_DIR` can no longer send a write outside the folder.
+
+### Configuration
+
+- `ROBLOX_OPEN_CLOUD_API_KEY_FILE` reads the Open Cloud key from a file, so it stays out of process listings and client configs.
+- `ROBLOX_STUDIO_LOG_DIR` overrides where `get_playtest_logs` reads Studio's logs.
+
+### Linux
+
+- Window capture accepts Studio windows of class `steam_proton`.
+
 ## 1.0.0
 
 The first team release, based on robloxstudio-mcp 3.2.0.
