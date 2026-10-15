@@ -494,6 +494,30 @@ function decode(cursor: string) {
 }
 
 describe('get_errors', () => {
+  test('exclude drops matching messages before grouping, ignoring case, and counts them', async () => {
+    const buffers: Buffers = {
+      s: [
+        { seq: 1, ts: 1, level: 'ERR', message: 'Failed to load sound rbxassetid://1: Asset has not been reviewed' },
+        { seq: 2, ts: 2, level: 'ERR', message: 'The experience doesn\'t have access permission to use asset id 9. Click to share access' },
+        { seq: 3, ts: 3, level: 'ERR', message: 'ServerScriptService.Main:4: real problem' },
+        { seq: 4, ts: 4, level: 'ERR', message: 'failed to load SOUND rbxassetid://2: Asset is not approved' },
+      ],
+    };
+    const { host } = logHost([{ role: 'server', peerId: 's' }], buffers);
+    const result = body(await getErrors(host, 'inst-exclude', { since: 'all', exclude: ['Failed to load sound', 'ACCESS PERMISSION'], limit: 1 }));
+    expect(result.groups.map((group: { message: string }) => group.message)).toEqual(['ServerScriptService.Main:4: real problem']);
+    expect(result.excluded).toBe(3);
+    expect(result.truncated).toBeUndefined();
+    expect(result.totals).toEqual({ errors: 4, warnings: 0 });
+  });
+
+  test('exclude rejects anything but a short list of non-empty texts', async () => {
+    const { host } = logHost([], {});
+    await expect(getErrors(host, undefined, { exclude: [''] })).rejects.toThrow('exclude must be');
+    await expect(getErrors(host, undefined, { exclude: [3] })).rejects.toThrow('exclude must be');
+    await expect(getErrors(host, undefined, { exclude: Array(21).fill('x') })).rejects.toThrow('exclude must be');
+  });
+
   test('groups repeats across peers with counts, roles, times and the stack, oldest first', async () => {
     const buffers: Buffers = {
       e: [{ seq: 1, ts: 5, level: 'OUT', message: 'edit noise' }],

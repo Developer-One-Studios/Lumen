@@ -238,6 +238,7 @@ Scripts that game code moved at runtime, the way Cmdr moves its commands, are fo
 
 Returns a deduplicated digest of errors and warnings from every peer, each with a count, peers, first and last time and the stack.
 A bare call continues where the previous call stopped, and `since: "all"` reads everything still buffered.
+`exclude` drops messages containing any of the given texts before grouping, so noise such as asset permission errors does not use up the limit.
 
 ### `replication_diff`
 

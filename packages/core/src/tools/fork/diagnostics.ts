@@ -5,6 +5,7 @@ import type { ForkFeature } from './feature.js';
 const RUNTIME_LOGS = '/api/get-runtime-logs';
 const MAX_MESSAGE_CHARS = 2000;
 const MAX_STACK_LINES = 12;
+const MAX_EXCLUDES = 20;
 
 type Level = 'ERR' | 'WARN';
 type LogEntry = { seq?: unknown; ts?: unknown; level?: unknown; message?: unknown };
@@ -145,6 +146,22 @@ export function groupKey(level: Level, message: string): string {
   return `${level}\n${message.replace(/(:\d+:)|\d+(?:\.\d+)?/g, (match, location: string | undefined) => location ?? '#')}`;
 }
 
+/** Lowercased exclude texts. Noise such as asset permission errors can flood a playtest and hide what matters. */
+export function parseExcludes(value: unknown): string[] {
+  if (value === undefined) return [];
+  const list = typeof value === 'string' ? [value] : value;
+  if (!Array.isArray(list) || list.length > MAX_EXCLUDES || list.some((item) => typeof item !== 'string' || item.trim() === '')) {
+    throw new Error(`exclude must be up to ${MAX_EXCLUDES} non-empty strings.`);
+  }
+  return list.map((item) => item.toLowerCase());
+}
+
+export function isExcluded(message: string, excludes: string[]): boolean {
+  if (excludes.length === 0) return false;
+  const lower = message.toLowerCase();
+  return excludes.some((text) => lower.includes(text));
+}
+
 function clip(text: string): string {
   return text.length > MAX_MESSAGE_CHARS ? `${text.slice(0, MAX_MESSAGE_CHARS)}...` : text;
 }
@@ -160,6 +177,7 @@ export async function getErrors(
   const limit = clamp(body.limit, 20, 1, 100);
   if (body.since !== undefined && typeof body.since !== 'string') throw new Error('since must be a cursor string or "all".');
   const cursor = body.since === undefined || body.since === 'all' ? undefined : decodeCursor(body.since);
+  const excludes = parseExcludes(body.exclude);
 
   const peers = [...await host.peerTargets('all', instanceId)].sort((a, b) => roleRank(a.role) - roleRank(b.role));
   const remembered = lastSeqs.get(host) ?? new Map<string, number>();
@@ -196,8 +214,13 @@ export async function getErrors(
     level === 'both' || (level === 'errors' ? occurrence.level === 'ERR' : occurrence.level === 'WARN');
   type Group = { first: Occurrence; count: number; peers: Set<string>; lastTs: number; stack: string[]; stacks: Set<string>; messages: Set<string> };
   const groups = new Map<string, Group>();
+  let excluded = 0;
   for (const occurrence of occurrences.sort((a, b) => a.ts - b.ts)) {
     if (!wanted(occurrence)) continue;
+    if (isExcluded(occurrence.message, excludes)) {
+      excluded++;
+      continue;
+    }
     const key = groupKey(occurrence.level, occurrence.message);
     let group = groups.get(key);
     if (!group) {
@@ -240,6 +263,7 @@ export async function getErrors(
       warnings: occurrences.filter((occurrence) => occurrence.level === 'WARN').length,
     },
     groups: listed,
+    ...(excluded > 0 ? { excluded } : {}),
     ...(groups.size > limit ? { truncated: true, omittedGroups: groups.size - limit } : {}),
     ...(Object.keys(lost).length > 0 ? { lost } : {}),
     ...(peerErrors.length > 0 ? { peerErrors } : {}),
@@ -266,6 +290,12 @@ export const diagnosticsFeature: ForkFeature = {
             description: 'Messages to include, errors by default.',
           },
           limit: { type: 'number', minimum: 1, maximum: 100, default: 20, description: 'Most distinct messages to return, errors first, then oldest first.' },
+          exclude: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: MAX_EXCLUDES,
+            description: 'Skip messages containing any of these texts, ignoring case.',
+          },
           instance_id: { type: 'string', description: 'Studio process ID when ambiguous.' },
         },
       },
@@ -289,6 +319,7 @@ export const diagnosticsFeature: ForkFeature = {
 - A retried bare call returns nothing new, so keep the returned cursor and pass it as since to read again from that point, or pass since=all to read every buffer from the start.
 - Errors come before warnings and each level is ordered by first occurrence, so the first error is usually the root cause and later ones are often fallout.
 - level=both adds warnings such as infinite yield notices, and totals counts both levels either way.
+- exclude takes texts such as "Failed to load sound" or "access permission to use asset", and any message containing one, ignoring case, is left out before grouping, so noise never takes up the limit. excluded counts the messages left out.
 - Each peer keeps only about 64 KB of output, so a noisy playtest drops old lines, and lost says how many each peer dropped between calls.
 - A new playtest has new peers, so its server and clients are read from the start of their buffers.
 - Messages and stack frames get [file:line] when a Rojo sourcemap is found.
