@@ -25,6 +25,7 @@ Tool descriptions explain selection. Input schemas explain arguments. This guide
 - Use get_instance_properties and get_attributes after locating an instance.
 - Use execute_luau for custom traversal, bulk edits, and work that would otherwise need many tool calls. It runs through the Studio plugin context.
 - Use set_properties when several known properties on one instance can be updated in one request.
+- Request stages are queued, dispatched, executing (plugin handler entered), and response_delivery (handler returned or admission rejected). executionOutcome is separate from waiter state and delivery outcome, and handler observations do not prove user Luau instructions ran. A waiter timeout is not an execution deadline or rollback. Neither missing progress nor connection loss proves completion.
 
 ## Selection and viewport
 

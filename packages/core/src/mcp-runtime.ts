@@ -106,6 +106,20 @@ const OPEN_WORLD_TOOLS = new Set([
   'search_assets',
   'upload_asset',
 ]);
+// Clients that defer tools behind a search (Claude Code's tool search) show only names until a tool is loaded.
+// These change how an agent approaches a whole task, so they load upfront and are compared on every turn.
+// Together they cost about 11,000 characters of catalog.
+export const ALWAYS_LOAD_TOOLS = new Set([
+  'eval_client_runtime',
+  'eval_server_runtime',
+  'execute_luau',
+  'get_errors',
+  'playtest_scenario',
+  'record_viewport',
+  'wait_for',
+  'watch',
+]);
+const ALWAYS_LOAD_META = { 'anthropic/alwaysLoad': true } as const;
 const STRUCTURED_OBJECT_SCHEMA = {
   type: 'object',
   additionalProperties: true,
@@ -273,6 +287,7 @@ export function publicToolDefinition(definition: ToolDefinition) {
     inputSchema: compactSchema(definition.inputSchema) as Record<string, unknown>,
     ...(outputSchema ? { outputSchema } : {}),
     annotations: definition.annotations ?? toolAnnotations(definition),
+    ...(ALWAYS_LOAD_TOOLS.has(definition.name) ? { _meta: ALWAYS_LOAD_META } : {}),
   };
 }
 
@@ -290,7 +305,6 @@ export function serverInstructions(definitions: readonly ToolDefinition[]): stri
   if (has('get_request_status', 'execute_luau', 'set_properties')) {
     instructions.push(
       'Supply a unique operation_id to execute_luau or set_properties when retry safety matters. After a timeout, query get_request_status with that ID before retrying. Identical arguments reuse a retained outcome; changed arguments are rejected. Recovery and deduplication are bounded to the current server session and five-minute retention window; result payloads may be evicted earlier. Unknown status does not mean unexecuted, and cancellation cannot roll back mutations.',
-      'Request stages are queued, dispatched, executing (plugin handler entered), and response_delivery (handler returned or admission rejected). executionOutcome is separate from waiter state and delivery outcome; handler observations do not prove user Luau instructions ran. A waiter timeout is not an execution deadline or rollback. Neither missing progress nor connection loss proves completion.',
     );
   }
   if (has('search_objects', 'get_project_structure', 'grep_scripts', 'execute_luau')) {
@@ -369,6 +383,7 @@ export function createToolServer(options: McpRuntimeOptions): McpServer {
           ? { outputSchema: fromJsonSchema<Record<string, unknown>>(publicDefinition.outputSchema as Record<string, unknown>) }
           : {}),
         annotations: publicDefinition.annotations,
+        ...(publicDefinition._meta ? { _meta: publicDefinition._meta } : {}),
       },
       async (args, context) => {
         try {

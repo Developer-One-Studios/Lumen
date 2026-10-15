@@ -49,4 +49,16 @@ describe('Luau deadlines', () => {
     expect(bridge.settleTransportResponse('server', delivery!.requestId, { bridge: 'ok', ok: true, result: '1' })).toBe('accepted');
     expect(JSON.parse((await call).content[0].text)).toMatchObject({ ok: true, result: '1' });
   });
+
+  test('the first Luau that waits in a loop gets a pointer to wait_for and watch, once', async () => {
+    const run = async (code: string) => {
+      const call = tools.evalServerRuntime(code, 'instance:deadline', 3);
+      const delivery = bridge.claimNextRequestForTransport('server', 'socket');
+      bridge.settleTransportResponse('server', delivery!.requestId, { bridge: 'ok', ok: true, result: '1' });
+      return JSON.parse((await call).content[0].text);
+    };
+    expect((await run('return 1')).hint).toBeUndefined();
+    expect((await run('repeat task.wait() until workspace:GetAttribute("Ready")')).hint).toContain('wait_for');
+    expect((await run('while true do task.wait(1) end')).hint).toBeUndefined();
+  });
 });

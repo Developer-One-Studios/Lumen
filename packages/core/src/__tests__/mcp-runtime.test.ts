@@ -5,6 +5,7 @@ import type { Server as HttpServer } from 'node:http';
 import { BridgeService, MultiplayerGroupInUseError, RequestFailure, RoutingFailure } from '../bridge-service.js';
 import { createHttpServer, TOOL_HANDLERS } from '../http-server.js';
 import {
+  ALWAYS_LOAD_TOOLS,
   createToolServer,
   normalizeToolResult,
   publicToolDefinition,
@@ -13,7 +14,7 @@ import {
 } from '../mcp-runtime.js';
 import { getReadOnlyTools, TOOL_DEFINITIONS } from '../tools/definitions.js';
 import { FORK_FEATURES } from '../tools/fork/index.js';
-import type { RobloxStudioTools } from '../tools/index.js';
+import { LOOP_HINT, waitsInLoop, type RobloxStudioTools } from '../tools/index.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -464,6 +465,46 @@ describe('MCP v2 tool runtime', () => {
     expect(inspectorInstructions).toContain('get_connected_instances');
     expect(inspectorInstructions).toContain('get_roblox_docs');
     expect(inspectorInstructions).toContain('lumen://tool-guides');
+  });
+
+  test('keeps the instructions under the 4096 characters clients cut them at', () => {
+    expect(serverInstructions(TOOL_DEFINITIONS).length).toBeLessThanOrEqual(4096);
+    expect(serverInstructions(TOOL_DEFINITIONS)).toContain('use wait_for to wait for a state and watch to sample values over time');
+  });
+
+  test('marks the tools that shape a whole task to load upfront, through tools/list', async () => {
+    const catalog = TOOL_DEFINITIONS.map(publicToolDefinition);
+    expect(catalog.filter((tool) => tool._meta).map((tool) => tool.name).sort()).toEqual([...ALWAYS_LOAD_TOOLS].sort());
+    const upfront = JSON.stringify(catalog.filter((tool) => ALWAYS_LOAD_TOOLS.has(tool.name)));
+    expect(upfront.length).toBeLessThanOrEqual(13_000);
+
+    const definitions = TOOL_DEFINITIONS.filter((tool) => tool.name === 'watch' || tool.name === 'get_place_info');
+    const server = createToolServer({
+      config: { name: 'test-server', version: '3.0.0', tools: definitions },
+      getTools: () => ({} as RobloxStudioTools),
+      era: 'modern',
+      invoke: async () => ({ content: [{ type: 'text', text: '{}' }] }),
+    });
+    const client = new Client({ name: 'test-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const listed = new Map((await client.listTools()).tools.map((tool) => [tool.name, tool]));
+      expect(listed.get('watch')?._meta).toEqual({ 'anthropic/alwaysLoad': true });
+      expect(listed.get('get_place_info')?._meta).toBeUndefined();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  test('recognizes Luau that waits inside a loop', () => {
+    expect(waitsInLoop('repeat task.wait() until done')).toBe(true);
+    expect(waitsInLoop('while not ready do\n  RunService.Heartbeat:Wait()\nend')).toBe(true);
+    expect(waitsInLoop('for _, part in parts do part.Anchored = true end')).toBe(false);
+    expect(waitsInLoop('task.wait(1) return 1')).toBe(false);
+    expect(LOOP_HINT).toContain('wait_for');
   });
 
   test('advertises annotations and returns validated structuredContent', async () => {

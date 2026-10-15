@@ -218,6 +218,18 @@ function luauDeadline(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(300, Math.max(1, value)) : DEFAULT_LUAU_DEADLINE_S;
 }
 
+// Agents fall back to hand-written polling and sampling loops in raw Luau, which costs a round trip per attempt and
+// guesses at timing. The first such call in a session gets a pointer to the tools built for it.
+const LOOP_KEYWORD = /\b(?:while|repeat)\b/;
+const LOOP_YIELD = /\b(?:task\.wait|wait)\s*\(|\.(?:Heartbeat|RenderStepped|Stepped|PreRender|PostSimulation)\s*:\s*Wait\s*\(/;
+export const LOOP_HINT =
+  'This code waits inside a loop. wait_for waits until a condition holds and watch samples values over a window, each in one call '
+  + 'with a structured result, and playtest_scenario chains them with input, screenshots and record steps.';
+
+export function waitsInLoop(code: string): boolean {
+  return LOOP_KEYWORD.test(code) && LOOP_YIELD.test(code);
+}
+
 const MAX_DEVICE_MATRIX_ENTRIES = 6;
 const MAX_NETWORK_PACKET_LOSS_PERCENT = 0.5;
 const GREP_SCRIPTS_TIMEOUT_MS = 120_000;
@@ -1099,6 +1111,7 @@ export class RobloxStudioTools {
     process.platform === 'linux' ? openX11FrameSource(titleHint) : hostWindowFrameSource(this.hostWindowCapture, titleHint);
   private hostViewportRects = new Map<string, HostViewportRectCacheEntry>();
   private viewportCaptureQueues = new Map<string, Promise<void>>();
+  private loopHintShown = false;
   readonly fork: ForkTools;
   // Peer routing for the fork's feature modules, which live outside this class.
   readonly forkHost: ForkHost;
@@ -2096,14 +2109,18 @@ export class RobloxStudioTools {
     }
     const deadline = luauDeadline(timeout_s);
     const response = await this._callSingle('/api/execute-luau', { code, timeout_s: deadline }, target || 'edit', instance_id, (deadline + 5) * 1000, undefined, operation_id);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(response)
-        }
-      ]
-    };
+
+    return this._luauReply(code, response);
+  }
+
+  /** The plugin's reply, plus the loop hint the first time this session's code waits inside a loop. */
+  private _luauReply(code: string, response: unknown) {
+    let body = response;
+    if (!this.loopHintShown && waitsInLoop(code) && response && typeof response === 'object' && !Array.isArray(response)) {
+      this.loopHintShown = true;
+      body = { ...response, hint: LOOP_HINT };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(body) }] };
   }
 
   async evalServerRuntime(code: string, instance_id?: string, timeout_s?: unknown) {
@@ -2112,14 +2129,8 @@ export class RobloxStudioTools {
     }
     const deadline = luauDeadline(timeout_s);
     const response = await this._callSingle('/api/eval-runtime', { code, timeout_s: deadline }, 'server', instance_id, (deadline + 5) * 1000);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(response)
-        }
-      ]
-    };
+
+    return this._luauReply(code, response);
   }
 
   async evalClientRuntime(code: string, target?: string, instance_id?: string, timeout_s?: unknown) {
@@ -2132,14 +2143,8 @@ export class RobloxStudioTools {
     }
     const deadline = luauDeadline(timeout_s);
     const response = await this._callSingle('/api/eval-runtime', { code, timeout_s: deadline }, clientTarget, instance_id, (deadline + 5) * 1000);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(response)
-        }
-      ]
-    };
+
+    return this._luauReply(code, response);
   }
 
   async setNetworkProfile(profile: string, target?: string, overrides?: Record<string, unknown>, instance_id?: string) {

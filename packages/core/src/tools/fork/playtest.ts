@@ -709,7 +709,7 @@ const definitions: ToolDefinition[] = [
     name: 'wait_for',
     category: 'write',
     annotations: READ_ONLY_PROBE,
-    description: 'Use to block until a Luau condition is true or a log line appears, polling inside Studio.',
+    description: 'Use to wait until a condition holds in Studio, such as a loading screen gone, instead of a polling loop.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -726,7 +726,7 @@ const definitions: ToolDefinition[] = [
   {
     name: 'watch',
     category: 'write',
-    description: 'Use to sample Luau expressions over time and see how values such as speed or cooldowns evolve.',
+    description: 'Use to sample values over a window, such as which lights or effects are on during a cutscene, in one call.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -812,7 +812,7 @@ export const playtestFeature: ForkFeature = {
     },
     {
       tools: ['wait_for', 'watch'],
-      text: 'Use wait_for instead of sleeping between calls, and watch to see how values change over time.',
+      text: 'Instead of loops with task.wait in execute_luau or eval, use wait_for to wait for a state and watch to sample values over time.',
     },
   ],
   guide,
