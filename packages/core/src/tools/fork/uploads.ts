@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { writeArtifact } from '../../artifact-paths.js';
+import { missingInputHint, writeArtifact } from '../../artifact-paths.js';
 import type { RobloxStudioTools } from '../index.js';
 import { withArgs } from '../fork-luau.js';
 import { clamp, luauValue, parseResult, toolText, type PeerTarget } from '../fork-tools.js';
@@ -519,6 +519,7 @@ const uploadAssets: ForkHandler = async (tools, body, context) => {
     files: rows,
     ...(sounds ? { sounds } : {}),
     ...(missingRoots.length > 0 ? { missing_roots: missingRoots } : {}),
+    ...(rows.some((row) => row.error === 'file not found') ? { hint: missingInputHint() } : {}),
     ...(manifest ? { manifest } : {}),
     ...(manifestError ? { manifestError } : {}),
   });

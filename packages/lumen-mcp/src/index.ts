@@ -1,4 +1,4 @@
-import { RobloxStudioMCPServer, getAllTools } from 'lumen-mcp-core';
+import { RobloxStudioMCPServer, getAllTools, loadOpenCloudKeyFile } from 'lumen-mcp-core';
 import { createRequire } from 'module';
 import { installBundledPlugin, installPlugin } from './install-plugin.js';
 
@@ -38,6 +38,8 @@ if (installBundledOnly || installWithFallback) {
   if (openCloudKey) process.env.ROBLOX_OPEN_CLOUD_API_KEY = openCloudKey;
   if (creatorId) process.env.ROBLOX_CREATOR_USER_ID = creatorId;
   if (creatorGroupId) process.env.ROBLOX_CREATOR_GROUP_ID = creatorGroupId;
+  const keyFileProblem = loadOpenCloudKeyFile();
+  if (keyFileProblem) console.error(`[lumen-mcp] ${keyFileProblem}`);
 
   const require = createRequire(import.meta.url);
   const { version: VERSION } = require('../package.json');

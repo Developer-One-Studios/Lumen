@@ -384,7 +384,7 @@ export class OpenCloudClient {
 
     if (authRequired && !this.apiKey) {
       throw new Error(
-        'Open Cloud API key not configured. Set ROBLOX_OPEN_CLOUD_API_KEY environment variable.'
+        'Open Cloud API key not configured. Set ROBLOX_OPEN_CLOUD_API_KEY, or ROBLOX_OPEN_CLOUD_API_KEY_FILE to a file holding it.'
       );
     }
 

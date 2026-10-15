@@ -60,6 +60,14 @@ export function writeArtifact(requested: string, data: string | Buffer, env: Nod
   return target;
 }
 
+/** Advice for an input file the server cannot see. A sandboxed server sees only the folders it was given. */
+export function missingInputHint(env: NodeJS.ProcessEnv = process.env): string {
+  const root = env.ROBLOX_MCP_ARTIFACT_DIR?.trim();
+  return root
+    ? `Lumen may only see some folders, so copy the file into the artifact folder ${path.resolve(root)} and pass that path.`
+    : 'Check that the Lumen server process can see this path. A sandboxed server only sees the folders it was given.';
+}
+
 // Baselines are files these tools wrote, so reads stay inside the same root.
 export function resolveArtifactReadPath(requested: string, env: NodeJS.ProcessEnv = process.env): string {
   const root = env.ROBLOX_MCP_ARTIFACT_DIR?.trim();

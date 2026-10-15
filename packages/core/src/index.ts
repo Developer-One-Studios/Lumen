@@ -20,6 +20,7 @@ export {
 } from './tools/definitions.js';
 export type { ToolDefinition, ToolCategory } from './tools/definitions.js';
 export { OpenCloudClient } from './opencloud-client.js';
+export { loadOpenCloudKeyFile } from './opencloud-key.js';
 export {
   configurePluginAssetForPort,
   getPluginsFolder,

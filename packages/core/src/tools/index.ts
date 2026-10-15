@@ -40,7 +40,7 @@ import {
 import type { HostCaptureResult, HostWindowIdentity, ViewportRect } from '../host-capture.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveArtifactReadPath, writeArtifact } from '../artifact-paths.js';
+import { missingInputHint, resolveArtifactReadPath, writeArtifact } from '../artifact-paths.js';
 import { ForkTools, cameraViews, type CameraView, type ForkHost, type PeerTarget } from './fork-tools.js';
 
 type RawImageCaptureResponse = {
@@ -4773,7 +4773,7 @@ export class RobloxStudioTools {
     groupId?: string
   ) {
     if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
+      throw new Error(`File not found: ${filePath}. ${missingInputHint()}`);
     }
 
     const fileContent = fs.readFileSync(filePath);
@@ -4812,7 +4812,7 @@ export class RobloxStudioTools {
         ? ' Alternatively, set ROBLOSECURITY to use cookie auth.'
         : '';
       throw new Error(
-        `No auth configured for ${assetType} upload. Set ROBLOX_OPEN_CLOUD_API_KEY (needs asset:write scope).${cookieHint}`
+        `No auth configured for ${assetType} upload. Set ROBLOX_OPEN_CLOUD_API_KEY, or ROBLOX_OPEN_CLOUD_API_KEY_FILE to a file holding it (needs asset:write scope).${cookieHint}`
       );
     }
 
