@@ -66,8 +66,16 @@ const NET_WM_NAME = 0x200;
 
 // Enough of an X server for the recorder: setup with a cookie, the five requests it makes, an unasked-for event before
 // every image, and BadMatch for an image of a minimized window. Pixel (x, y) is red x, green y, blue 7.
+let fakeServers = 0;
+
+// Node listens on local sockets only through named pipes on Windows, and on Unix sockets everywhere else.
+function localSocketPath(): string {
+  if (process.platform === 'win32') return `\\\\.\\pipe\\lumen-fake-x-${process.pid}-${++fakeServers}`;
+  return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fake-x-')), 'X99');
+}
+
 function fakeXServer(state: { mapped: boolean; requests: number[] }) {
-  const socketPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fake-x-')), 'X99');
+  const socketPath = localSocketPath();
   const server = net.createServer((socket) => {
     let buffer = Buffer.alloc(0);
     let setUp = false;
@@ -114,7 +122,8 @@ function fakeXServer(state: { mapped: boolean; requests: number[] }) {
       }
     });
   });
-  return new Promise<{ socketPath: string; close: () => void }>((resolve) => {
+  return new Promise<{ socketPath: string; close: () => void }>((resolve, reject) => {
+    server.once('error', reject);
     server.listen(socketPath, () => resolve({ socketPath, close: () => server.close() }));
   });
 }
