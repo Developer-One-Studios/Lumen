@@ -4,6 +4,7 @@ import { checkpointFeature } from './checkpoint.js';
 import { cloudFeature } from './cloud.js';
 import { diagnosticsFeature } from './diagnostics.js';
 import { diffFeature } from './diff.js';
+import { exportScriptsFeature } from './export-scripts.js';
 import { playtestLogsFeature } from './playtest-logs.js';
 import { playtestFeature } from './playtest.js';
 import { spatialFeature } from './spatial.js';
@@ -25,4 +26,5 @@ export const FORK_FEATURES: ForkFeature[] = [
   uploadsFeature,
   transferFeature,
   diffFeature,
+  exportScriptsFeature,
 ];

@@ -60,6 +60,18 @@ export function writeArtifact(requested: string, data: string | Buffer, env: Nod
   return target;
 }
 
+/** Where writeArtifact would put requested, without writing, under the same root rules. */
+export function resolveArtifactWritePath(requested: string, env: NodeJS.ProcessEnv = process.env): string {
+  const root = env.ROBLOX_MCP_ARTIFACT_DIR?.trim();
+  if (!root) return path.resolve(requested);
+  const resolvedRoot = path.resolve(root);
+  const target = path.resolve(resolvedRoot, requested);
+  if (!isInside(resolvedRoot, target) || target === resolvedRoot) {
+    throw new Error(`Output path ${requested} is outside ROBLOX_MCP_ARTIFACT_DIR (${resolvedRoot}).`);
+  }
+  return target;
+}
+
 /** Advice for an input file the server cannot see. A sandboxed server sees only the folders it was given. */
 export function missingInputHint(env: NodeJS.ProcessEnv = process.env): string {
   const root = env.ROBLOX_MCP_ARTIFACT_DIR?.trim();
