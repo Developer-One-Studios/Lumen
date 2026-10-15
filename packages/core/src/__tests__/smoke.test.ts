@@ -2947,6 +2947,11 @@ describe('Smoke', () => {
       dataModelName: 'TestPlace',
       isRunning: true,
     });
+    (tools as unknown as { _waitForRuntimeRoles: () => Promise<unknown> })._waitForRuntimeRoles = async () => ({
+      ok: false,
+      roles: ['edit', 'server'],
+      timedOut: true,
+    });
 
     const resultPromise = tools.stopPlaytest();
     const pending = claimQueuedRequest(bridge, 'session-1');
@@ -2960,7 +2965,7 @@ describe('Smoke', () => {
       error: 'Playtest teardown did not complete.',
       message: 'Edit stop request failed, and runtime peers are still connected.',
       runtimeStopped: false,
-      timedOut: false,
+      timedOut: true,
       roles: ['edit', 'server'],
       stopSignalAccepted: false,
       runtimeRoles: ['server'],
@@ -2968,6 +2973,59 @@ describe('Smoke', () => {
     expect(body.detail).toContain('edit peer timed out');
     expect(body.stopRequestError).toContain('edit peer timed out');
     expect(body.fallbacks).toBeUndefined();
+  });
+
+  test('stop_playtest reports success when the stop reply is lost but the runtime peers leave', async () => {
+    const bridge = new BridgeService();
+    const tools = new RobloxStudioTools(bridge);
+    bridge.registerPeer(READY);
+    bridge.registerPeer({
+      peerId: 'server-1',
+      transportPeerId: 'server-1',
+      instanceId: 'instance:test',
+      role: 'server',
+      placeId: 0,
+      placeName: 'TestPlace',
+      dataModelName: 'TestPlace',
+      isRunning: true,
+    });
+    bridge.registerPeer({
+      peerId: 'client-1',
+      transportPeerId: 'server-1',
+      instanceId: 'instance:test',
+      role: 'client',
+      placeId: 0,
+      placeName: 'TestPlace',
+      dataModelName: 'TestPlace',
+      isRunning: true,
+    });
+
+    const resultPromise = tools.stopPlaytest();
+    const pending = claimQueuedRequest(bridge, 'session-1');
+    expect(pending).toBeTruthy();
+    bridge.rejectRequest(pending!.requestId, new Error('Request timeout: waiter ended, execution is not cancelled'));
+    bridge.unregisterPeer('server-1');
+    bridge.unregisterPeer('client-1');
+
+    const body = JSON.parse((await resultPromise).content[0].text);
+    expect(body).toMatchObject({ success: true, runtimeStopped: true, timedOut: false, roles: ['edit'] });
+    expect(body.message).toContain('reply to the stop request was lost');
+    expect(body.stopRequestError).toContain('Request timeout');
+  });
+
+  test('stop_playtest still reports a failed request when no playtest was running', async () => {
+    const bridge = new BridgeService();
+    const tools = new RobloxStudioTools(bridge);
+    bridge.registerPeer(READY);
+
+    const resultPromise = tools.stopPlaytest();
+    const pending = claimQueuedRequest(bridge, 'session-1');
+    expect(pending).toBeTruthy();
+    bridge.rejectRequest(pending!.requestId, new Error('edit peer timed out'));
+
+    const body = JSON.parse((await resultPromise).content[0].text);
+    expect(body).toMatchObject({ success: false, error: 'Edit stop request failed.' });
+    expect(body.runtimeStopped).toBeUndefined();
   });
 
   test('stop_playtest keeps the process ID after publication metadata changes', async () => {
@@ -3117,7 +3175,8 @@ describe('Smoke', () => {
     if (runtimePresent) {
       expect(body).toMatchObject({
         runtimeStopped: false,
-        timedOut: false,
+        // With a playtest running, a failed stop request still waits out the timeout for its peers to leave.
+        timedOut: true,
         stopSignalAccepted: false,
         stopRequestError: 'edit peer timed out; outcome unknown',
         runtimeRoles: ['server'],

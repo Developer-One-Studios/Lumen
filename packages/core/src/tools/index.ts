@@ -3614,6 +3614,7 @@ export class RobloxStudioTools {
     const refresh = this.bridge.refreshTopologyForRouting();
     if (refresh) await refresh;
     const { instanceId } = this._resolveSingleTarget('edit', instance_id);
+    const hadRuntime = this._runtimeTargetsForScope(instanceId).length > 0;
     let response: Record<string, unknown>;
     let stopRequestError: string | undefined;
     try {
@@ -3629,6 +3630,25 @@ export class RobloxStudioTools {
     let wait: { ok: boolean; roles: string[]; timedOut: boolean } | undefined;
     if (response?.success === true) {
       wait = await this._waitForRuntimeRoles(instanceId, { noRuntime: true }, timeout);
+    } else if (stopRequestError !== undefined && hadRuntime) {
+      // Ending the playtest can drop the reply to this very request while the stop itself goes through,
+      // so the outcome is read from whether the server and clients disconnect.
+      wait = await this._waitForRuntimeRoles(instanceId, { noRuntime: true }, timeout);
+      if (wait.ok) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              message: 'Playtest stopped. The reply to the stop request was lost, but every runtime peer disconnected.',
+              runtimeStopped: true,
+              timedOut: false,
+              roles: wait.roles,
+              stopRequestError,
+            }),
+          }],
+        };
+      }
     } else if (this._runtimeTargetsForScope(instanceId).length > 0) {
       wait = {
         ok: false,
