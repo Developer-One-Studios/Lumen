@@ -108,14 +108,17 @@ const OPEN_WORLD_TOOLS = new Set([
 ]);
 // Clients that defer tools behind a search (Claude Code's tool search) show only names until a tool is loaded.
 // These change how an agent approaches a whole task, so they load upfront and are compared on every turn.
-// Together they cost about 11,000 characters of catalog.
+// get_connected_instances and search_objects are the first calls of most Studio tasks, and without them an agent
+// tends to write its own traversal in execute_luau. Together they cost about 12,300 characters of catalog.
 export const ALWAYS_LOAD_TOOLS = new Set([
   'eval_client_runtime',
   'eval_server_runtime',
   'execute_luau',
+  'get_connected_instances',
   'get_errors',
   'playtest_scenario',
   'record_viewport',
+  'search_objects',
   'wait_for',
   'watch',
 ]);
