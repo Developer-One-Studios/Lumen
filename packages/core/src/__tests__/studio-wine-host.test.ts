@@ -147,6 +147,7 @@ describe('native Linux Studio executable resolution', () => {
     useWineLauncher(undefined);
     delete process.env.ROBLOX_STUDIO_EXE;
     expect(() => resolveStudioExe()).toThrow(/auto-discovery is only supported on Windows, WSL, and macOS/);
+    expect(() => resolveStudioExe()).toThrow(/ROBLOX_STUDIO_LAUNCH_BROKER.*restart it after setting either/);
 
     const exe = path.join(fixture, 'missing', 'studio');
     process.env.ROBLOX_STUDIO_EXE = exe;

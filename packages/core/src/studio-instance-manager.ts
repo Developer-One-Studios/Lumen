@@ -1305,6 +1305,16 @@ function resolveStudioExeFromVersions(root: string): string {
   return exe;
 }
 
+// A server keeps the environment it started with, so one started before a launcher was configured still fails here
+// after the configuration changes. On Linux the broker is the usual missing piece (Studio under Vinegar's Flatpak).
+function unsupportedPlatformMessage(): string {
+  const base = 'Roblox Studio executable auto-discovery is only supported on Windows, WSL, and macOS.';
+  if (process.platform !== 'linux') return `${base} Set ROBLOX_STUDIO_EXE.`;
+  return `${base} On Linux set ROBLOX_STUDIO_EXE to Studio inside a Wine prefix, or ROBLOX_STUDIO_LAUNCH_BROKER to a launch `
+    + 'broker socket for Studio in a Flatpak such as Vinegar. A server reads them only at startup, so restart it after '
+    + 'setting either, for example with /mcp in Claude Code.';
+}
+
 // Native Linux runs the Windows Studio build inside a Wine prefix, whose
 // location only the user knows.
 function resolveNativeLinuxStudioExe(): string {
@@ -1327,7 +1337,7 @@ export function resolveStudioExe(): string {
   }
 
   if (process.platform !== 'win32' && !isWsl()) {
-    throw new Error('Roblox Studio executable auto-discovery is only supported on Windows, WSL, and macOS. Set ROBLOX_STUDIO_EXE.');
+    throw new Error(unsupportedPlatformMessage());
   }
 
   const localAppData = windowsLocalAppData();
@@ -1345,7 +1355,7 @@ async function resolveStudioExeAsync(): Promise<string> {
     return '/Applications/RobloxStudio.app/Contents/MacOS/RobloxStudio';
   }
   if (process.platform !== 'win32' && !isWsl()) {
-    throw new Error('Roblox Studio executable auto-discovery is only supported on Windows, WSL, and macOS. Set ROBLOX_STUDIO_EXE.');
+    throw new Error(unsupportedPlatformMessage());
   }
 
   const localAppData = await windowsLocalAppDataAsync();

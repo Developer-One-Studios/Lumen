@@ -1,5 +1,11 @@
 # Lumen releases
 
+## Unreleased
+
+### Changed tools
+
+- On Linux, a launch without `ROBLOX_STUDIO_EXE` names `ROBLOX_STUDIO_LAUNCH_BROKER` too, and says that a server reads both only at startup.
+
 ## 1.1.0
 
 Based on robloxstudio-mcp 3.2.1.
