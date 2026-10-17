@@ -1502,7 +1502,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'capture_screenshot',
     category: 'read',
-    description: 'Use to capture the Studio viewport or each playtest client window, or to map input coordinates.',
+    description: 'Use to capture the viewport as its camera already sits, or each playtest client window, or to map input coordinates.',
     inputSchema: {
       type: 'object',
       properties: {
