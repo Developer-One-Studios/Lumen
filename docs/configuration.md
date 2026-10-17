@@ -218,6 +218,7 @@ Vinegar adds a second barrier, since it runs Studio inside a Flatpak.
 Set `ROBLOX_STUDIO_LAUNCH_BROKER` to the Unix socket of a broker that runs on the host, and `manage_instance` launches, observes and closes Studio through it instead of starting Studio itself.
 
 Each connection carries one JSON request line and gets one JSON reply line.
+The server keeps its side open until the reply arrives, so a broker answers on the request's newline and then closes the connection.
 A reply holds `ok: true` and the fields below, or `ok: false` and an `error` that the tool reports as it is.
 
 | Request | Reply |

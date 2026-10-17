@@ -22,14 +22,25 @@ const STUDIO: FakeProcess = {
   path: 'Z:\\home\\user\\versions\\version-1\\RobloxStudioBeta.exe',
 };
 
-// One JSON request line in, one JSON reply line out, like the host broker.
+// One JSON request line in, one JSON reply line out, like the host broker, which may take seconds to answer. A Windows
+// named pipe cannot be half closed, so a client that ends its side before the reply loses the connection here too.
 function startFakeBroker(socketPath: string, reply: (request: Record<string, unknown>) => unknown): Promise<net.Server> {
   const server = net.createServer({ allowHalfOpen: true }, (socket) => {
     let buffer = '';
+    let replied = false;
     socket.setEncoding('utf8');
-    socket.on('data', (chunk) => { buffer += chunk; });
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      const newline = buffer.indexOf('\n');
+      if (newline < 0) return;
+      const answer = `${JSON.stringify(reply(JSON.parse(buffer.slice(0, newline))))}\n`;
+      setTimeout(() => {
+        replied = true;
+        if (!socket.destroyed) socket.end(answer);
+      }, 5);
+    });
     socket.on('end', () => {
-      socket.end(`${JSON.stringify(reply(JSON.parse(buffer)))}\n`);
+      if (!replied) socket.destroy();
     });
   });
   const { promise, resolve, reject } = Promise.withResolvers<net.Server>();

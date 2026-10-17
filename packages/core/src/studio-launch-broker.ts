@@ -1,7 +1,7 @@
 // A server sandboxed in its own PID namespace sees and signals none of the host's processes, and a launcher such as
 // Vinegar runs Studio inside a Flatpak with a PID namespace of its own. ROBLOX_STUDIO_LAUNCH_BROKER names the Unix
 // socket of a broker on the host that launches, lists and stops Studio for the server. A connection carries one JSON
-// request line and gets one JSON reply line back.
+// request line and gets one JSON reply line back, then the broker closes it.
 import * as net from 'net';
 import type { StudioProcessAdapter, StudioProcessInfo } from './studio-instance-manager.js';
 
@@ -33,7 +33,8 @@ export function requestStudioBroker(
   socket.setTimeout(timeoutMs, () => {
     settle(new Error(`The Studio launch broker did not answer ${request.op} within ${timeoutMs} ms.`));
   });
-  socket.on('connect', () => socket.end(`${JSON.stringify(request)}\n`));
+  // Not end(): a Windows named pipe cannot be half closed, so ending here would drop the reply.
+  socket.on('connect', () => socket.write(`${JSON.stringify(request)}\n`));
   socket.on('data', (chunk: Buffer) => {
     size += chunk.length;
     if (size > MAX_REPLY_BYTES) settle(new Error('The Studio launch broker sent a reply over 1 MB.'));
