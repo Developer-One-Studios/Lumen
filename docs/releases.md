@@ -8,6 +8,7 @@
 
 ### Changed tools
 
+- `capture_views` takes `stage`, which copies instances into an empty spot for the shots and removes them again, and views that `frame` a staged copy place the camera themselves.
 - `get_connected_instances` and `search_objects` load upfront in clients that hide tools behind a search.
 - `capture_screenshot` says in its description that it shoots from where the camera already sits.
 - On Linux, a launch without `ROBLOX_STUDIO_EXE` names `ROBLOX_STUDIO_LAUNCH_BROKER` too, and says that a server reads both only at startup.

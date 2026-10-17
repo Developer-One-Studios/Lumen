@@ -43,7 +43,7 @@ It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3
 | Moving content | `copy_instances`, `move_instances`, `inspect_rbxm` | Copy a whole map from one open place into another without a file, move or turn Folders, each as one Ctrl+Z step, and look inside an .rbxm or match its models to the place without importing it. |
 | Level QA | `spatial_check` | Floating parts, overlaps, buried parts, jump gaps with real jump physics, pathfinding reach and distances. |
 | UI QA | `ui_audit`, `inspect_gui` | Offscreen, clipped, overlapping, tiny or unreadable GUI across phone, tablet and PC presets, plus clicks by GuiObject path. |
-| Screenshots | `capture_views`, `record_viewport` | Shots from chosen camera positions in edit mode or on playtest clients, held even against game camera scripts, and recordings of the viewport as a grid of timestamped frames. |
+| Screenshots | `capture_views`, `record_viewport` | Shots from chosen camera positions in edit mode or on playtest clients, held even against game camera scripts, shots of copies staged apart and removed again, and recordings of the viewport as a grid of timestamped frames. |
 | Rojo | `resolve_source`, `verify_sync` | Studio paths become `file:line`, edits to synced scripts are refused, and each peer is checked against the files on disk. |
 | Errors | `get_errors`, `get_playtest_logs` | A deduplicated error and warning digest from every peer since the last call, and the output of playtests that already ended. |
 | Networking | `replication_diff`, `fuzz_remotes` | Compare an instance between server and clients, and fire malformed or spammed payloads at remotes. |

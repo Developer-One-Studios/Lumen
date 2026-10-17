@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../definitions.js';
+import { captureStaged, MAX_STAGED } from './capture-stage.js';
 import type { ForkFeature } from './feature.js';
 
 const point = (description: string) => ({ type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description });
@@ -8,7 +9,7 @@ const CAPTURE_VIEWS: ToolDefinition = {
   name: 'capture_views',
   category: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  description: 'Use to screenshot the viewport from chosen camera positions, in edit or on playtest clients, camera restored after.',
+  description: 'Use to screenshot from chosen camera positions, or around copies of instances staged apart, camera restored after.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -21,9 +22,11 @@ const CAPTURE_VIEWS: ToolDefinition = {
           properties: {
             camera_position: point('Camera [x, y, z].'),
             look_at: point('Point [x, y, z] it faces.'),
+            frame: { type: 'integer', minimum: 0, description: 'Staged copy to frame instead, 1 for the first, 0 for all.' },
+            yaw: { type: 'number', description: 'Degrees around the framed copy, 0 its front, 90 its left.' },
+            pitch: { type: 'number', description: 'Degrees above the framed copy, default 15.' },
             label: { type: 'string', description: 'Name reported with this image.' },
           },
-          required: ['camera_position'],
         },
         description: 'Camera placements shot in order.',
       },
@@ -33,6 +36,16 @@ const CAPTURE_VIEWS: ToolDefinition = {
           { type: 'array', items: { type: 'string' } },
         ],
         description: '"all" or client roles or instance ids, views shot on each.',
+      },
+      stage: {
+        type: 'object',
+        description: 'Copies shown apart in edit mode for these views, removed after.',
+        properties: {
+          paths: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: MAX_STAGED, description: 'Instances to copy, placed side by side in this order.' },
+          at: point('Where the first copy stands, default high above the map.'),
+          settle_s: { type: 'number', minimum: 0, maximum: 5, description: 'Seconds for effects to fill in before shooting, default 1.' },
+        },
+        required: ['paths'],
       },
       max_width: { type: 'integer', minimum: 64, description: 'Downscale frames wider than this, keeping the aspect ratio.' },
       format: { type: 'string', enum: ['jpeg', 'png'], description: 'Image format, default jpeg.' },
@@ -70,6 +83,17 @@ export const captureFeature: ForkFeature = {
     record_viewport: async (tools, body) => tools.fork.serializeCapture(() => tools.recordViewport(body.instance_id as string | undefined, body)),
     capture_views: async (tools, body) => {
       if (body.views === undefined) throw new Error('views is required, for example [{"camera_position": [0, 50, 0], "look_at": [0, 0, 0]}]');
+      if (body.stage !== undefined) {
+        return tools.fork.serializeCapture(() => captureStaged(tools.forkHost, body, (views) => tools.captureScreenshot(
+          body.instance_id as string | undefined,
+          body.format as string | undefined,
+          body.quality as number | undefined,
+          { max_width: body.max_width, views },
+        )));
+      }
+      if (Array.isArray(body.views) && body.views.some((view) => view && typeof view === 'object' && 'frame' in view)) {
+        throw new Error('frame frames a staged copy, so pass stage with it');
+      }
       return tools.fork.serializeCapture(() => tools.captureScreenshot(
         body.instance_id as string | undefined,
         body.format as string | undefined,
@@ -110,6 +134,16 @@ export const captureFeature: ForkFeature = {
 - JPEG quality drops on busy frames to fit that budget, and a PNG over its share is refused, so use max_width when shooting several views.
 - With StreamingEnabled a client only has the parts streamed in around its character, so a distant client camera view can look empty while the edit view shows the parts.
 - Captures are serialized against each other, but other tools that move the camera at the same time still end up in the shot.
+
+## Staging copies for a look
+
+- stage paths copies up to 8 instances, such as unit models or effects, side by side into an empty spot, by default high above the map, shoots the views and takes the copies out again in the same call.
+- Use it to look at something that sits in storage, or to see it on its own, instead of placing copies in the Workspace by hand and cleaning up afterwards.
+- A view with frame places the camera itself: frame 1 is the first copy, 0 frames all of them, yaw turns around the copy from its front (90 shows its left side) and pitch looks down from above, 15 degrees by default.
+- Views with camera_position still work, and stage.at puts the copies at a known spot when you want to aim them yourself.
+- A model kept in storage has never been drawn, so its meshes and textures load first, for up to 10 seconds, and stageNote says when some were still loading. settle_s, 1 second by default, then lets particle emitters fill in. Effects that only run from a script, such as VFX Forge emits, do not play on a copy.
+- The copies sit in Workspace.__LumenStage, which is never saved, under an undo recording that is cancelled afterwards, so they leave no undo step. stage reports where each copy stood and its size.
+- Staging only works in edit mode, so stop a playtest first, and it cannot be combined with clients.
 
 ## Recording the viewport
 

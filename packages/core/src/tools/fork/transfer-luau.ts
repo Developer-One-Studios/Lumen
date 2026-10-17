@@ -2,7 +2,7 @@ import { withArgs } from '../fork-luau.js';
 
 // One undo step per call. Studio folds edits made outside any recording into the next one, so those are committed
 // as their own step first, and a plugin holds one recording at a time, so a busy recorder is retried briefly.
-const RECORDING = String.raw`
+export const RECORDING = String.raw`
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 
 local function beginRecording(name)

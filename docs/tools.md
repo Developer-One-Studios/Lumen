@@ -217,7 +217,12 @@ Takes screenshots from chosen camera positions and restores the camera afterward
 
 - `views`: up to 8 placements, each with `camera_position`, optional `look_at` and a `label`.
 - `clients`: `"all"` or a list of clients, to shoot each view on each client during a playtest.
+- `stage`: up to 8 instances copied side by side into an empty spot in edit mode, by default high above the map, and removed again after the shots.
+- `frame`, `yaw` and `pitch` on a view: frame one staged copy, or all of them with 0, from its front, a turn around it and a height.
 - `max_width`, `format` and `quality`.
+
+Staged copies sit in a Folder that is never saved, under an undo recording that is cancelled afterwards, so they leave no undo step.
+Their meshes and textures load before the first shot, which a model kept in storage needs because it has never been drawn.
 
 On a client the view is held every frame and put back whenever a game script moves the camera, so custom camera scripts cannot spoil the shot.
 A view that still drifted carries a warning.
