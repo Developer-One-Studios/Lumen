@@ -16,6 +16,7 @@ import {
   type ManagedStudioInstance,
   type StudioLaunchSource,
 } from '../studio-instance-manager.js';
+import { studioLaunchBrokerFromEnv } from '../studio-launch-broker.js';
 import {
   decodeImagePathToRgba,
   decodePngBase64ToRgba,
@@ -1149,7 +1150,7 @@ export class RobloxStudioTools {
     this.bridge = bridge;
     this.openCloudClient = new OpenCloudClient();
     this.cookieClient = new RobloxCookieClient();
-    this.instanceManager = new StudioInstanceManager();
+    this.instanceManager = new StudioInstanceManager({ processAdapter: studioLaunchBrokerFromEnv() });
     this.forkHost = {
       peerTargets: (target, instanceId, defaults) => this._peerTargets(target, instanceId, defaults),
       requestPeer: (endpoint, data, peerId, timeoutMs) => this._requestPeer(endpoint, data, peerId, timeoutMs),

@@ -211,6 +211,29 @@ stepped. `close` sends SIGTERM to that exact process, then SIGKILL if it is stil
 running. Sign-in settling before close and host window capture are not available
 under Wine.
 
+## Studio outside the server's sandbox
+
+A server confined to its own PID namespace, such as one under bubblewrap, can neither see nor signal a Studio on the host.
+Vinegar adds a second barrier, since it runs Studio inside a Flatpak.
+Set `ROBLOX_STUDIO_LAUNCH_BROKER` to the Unix socket of a broker that runs on the host, and `manage_instance` launches, observes and closes Studio through it instead of starting Studio itself.
+
+Each connection carries one JSON request line and gets one JSON reply line.
+A reply holds `ok: true` and the fields below, or `ok: false` and an `error` that the tool reports as it is.
+
+| Request | Reply |
+| --- | --- |
+| `{"op":"launch","args":[...]}` | `process`: the new Studio, once it runs. |
+| `{"op":"list"}` | `processes`: every Studio of the user. |
+| `{"op":"stop","pid":N,"startedAt":"..."}` | Nothing more, once that exact Studio has exited. |
+
+A process is `{"pid", "startedAt", "path", "commandLine"}`.
+`pid` is the PID on the host, and `startedAt` is the process start time as a Windows FILETIME string, which must be the same in every reply.
+`args` are Studio's own arguments, such as `--task EditPlace --placeId N --universeId N`, with place files as Linux paths for the broker to translate.
+Launch requests come from inside the sandbox, so a broker should accept only these tasks.
+
+A Studio outside the sandbox cannot read the sandbox's temp folder either, so `source=baseplate` needs `ROBLOX_STUDIO_BASEPLATE_DIR` set to a folder that both can see.
+A broker cannot hold Studio suspended, so `require_process_identity` launches are stopped again, and `studio_executable` and `process_environment` are refused.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -228,6 +251,8 @@ under Wine.
 | `ROBLOX_STUDIO_EXE` | Auto-discovered on Windows, WSL, and macOS | Studio executable to launch. Required on native Linux with a Wine launcher, where it must be an existing `RobloxStudioBeta.exe` in the Wine prefix. |
 | `ROBLOX_STUDIO_WINE_LAUNCHER` | Unset | Native Linux only: executable that `exec`s Wine on Studio. See [Native Linux with Wine](#native-linux-with-wine). |
 | `ROBLOX_STUDIO_WINE_START_TIMEOUT_MS` | `60000` | Native Linux with Wine only: how long an authorized launch may take to become `RobloxStudioBeta.exe`, from 1 to 150000 ms. |
+| `ROBLOX_STUDIO_LAUNCH_BROKER` | Unset | Unix socket of a host broker that launches, lists and stops Studio for a sandboxed server. See [Studio outside the server's sandbox](#studio-outside-the-servers-sandbox). |
+| `ROBLOX_STUDIO_BASEPLATE_DIR` | `lumen-mcp-baseplates` in the temp folder | Folder for the place files of `source=baseplate` launches. |
 | `ROBLOX_STUDIO_ALLOW_LAUNCH_OVERRIDES` | Unset | Set to `1` to let `manage_instance` accept `studio_executable`, `process_environment` and `studio_working_directory`, which can run any program. |
 | `ROBLOX_MCP_ARTIFACT_DIR` | Unset | Confines every tool-written file and baseline read to this directory; relative paths resolve inside it. |
 | `ROBLOX_SOURCEMAP` | Nearest `sourcemap.json` above the working directory | Rojo sourcemap used to annotate Studio locations with files and to refuse edits to synced scripts. |

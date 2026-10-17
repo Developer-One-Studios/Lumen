@@ -96,7 +96,8 @@ export type StudioProcessSnapshot =
   | { status: 'ok'; observedAt: number; processes: StudioProcessInfo[] }
   | { status: 'error'; observedAt: number; error: string };
 
-const BASEPLATE_TEMP_DIR = path.join(os.tmpdir(), 'lumen-mcp-baseplates');
+// A Studio outside the server's sandbox cannot read the sandbox's temp folder, so a folder both can see may replace it.
+const BASEPLATE_TEMP_DIR = process.env.ROBLOX_STUDIO_BASEPLATE_DIR?.trim() || path.join(os.tmpdir(), 'lumen-mcp-baseplates');
 const BASEPLATE_TEMP_NAME = /^Baseplate-\d+-\d+\.rbxl$/;
 const BASEPLATE_TEMPLATE_NAME = 'Baseplate.rbxl';
 
