@@ -32,7 +32,8 @@ function startFakeBroker(socketPath: string, reply: (request: Record<string, unk
       socket.end(`${JSON.stringify(reply(JSON.parse(buffer)))}\n`);
     });
   });
-  const { promise, resolve } = Promise.withResolvers<net.Server>();
+  const { promise, resolve, reject } = Promise.withResolvers<net.Server>();
+  server.once('error', reject);
   server.listen(socketPath, () => resolve(server));
   return promise;
 }
@@ -46,7 +47,10 @@ describe('Studio launch broker adapter', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-launch-broker-'));
-    socketPath = path.join(dir, 'broker.sock');
+    // On Windows Node listens on named pipes, never on a file system path.
+    socketPath = process.platform === 'win32'
+      ? `\\\\.\\pipe\\${path.basename(dir)}`
+      : path.join(dir, 'broker.sock');
     requests = [];
     processes = [];
   });
