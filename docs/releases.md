@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New tools
+
+- `inspect_rbxm` reads an .rbxm file's tree, attributes and asset ids without importing it, and matches its models to a folder of the place by the meshes they share.
+
 ### Changed tools
 
 - `get_connected_instances` and `search_objects` load upfront in clients that hide tools behind a search.

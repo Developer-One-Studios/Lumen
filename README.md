@@ -40,7 +40,7 @@ It is a fork of [robloxstudio-mcp](https://github.com/Chrrxs/robloxstudio-mcp) 3
 | Playtests | `playtest_scenario`, `wait_for`, `watch` | One call runs keys, clicks, walks, checks and screenshots and returns one report with errors from every peer. |
 | Movement | `navigate_character` | Pathfinding walks that stop within seconds when blocked and name the part in the way. |
 | Safe experiments | `checkpoint` | Snapshot the place, list every change since, and undo it all as one Ctrl+Z step. |
-| Moving content | `copy_instances`, `move_instances` | Copy a whole map from one open place into another without a file, and move or turn Folders, each as one Ctrl+Z step. |
+| Moving content | `copy_instances`, `move_instances`, `inspect_rbxm` | Copy a whole map from one open place into another without a file, move or turn Folders, each as one Ctrl+Z step, and look inside an .rbxm or match its models to the place without importing it. |
 | Level QA | `spatial_check` | Floating parts, overlaps, buried parts, jump gaps with real jump physics, pathfinding reach and distances. |
 | UI QA | `ui_audit`, `inspect_gui` | Offscreen, clipped, overlapping, tiny or unreadable GUI across phone, tablet and PC presets, plus clicks by GuiObject path. |
 | Screenshots | `capture_views`, `record_viewport` | Shots from chosen camera positions in edit mode or on playtest clients, held even against game camera scripts, and recordings of the viewport as a grid of timestamped frames. |

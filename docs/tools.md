@@ -163,6 +163,18 @@ Moves or turns Models, parts and Folders as one undo step named "MCP: move insta
 Welded parts stay together, Models with a PrimaryPart follow it, and Models without one keep their pivot in the same place relative to their parts.
 The result has the bounding box before and after, so the move can be checked without a screenshot.
 
+### `inspect_rbxm`
+
+Reads an .rbxm file without importing it, from a path, URL or base64 like `import_rbxm`.
+The file is read into memory in the edit plugin and never parented, so the place and its undo history stay untouched.
+
+- `root`: a slash path inside the file to start at, such as `allstuff/Juudara`.
+- `depth` and `limit`: how many levels and instances are listed. Deeper levels are summed up by class.
+- `assets`: also list every asset id the file uses, by property, with how many instances use each.
+- `match_in`: a place path, such as a folder of unit models. Each item of the file is matched against its children by the meshes and mesh textures they share.
+
+Effect textures are left out of matching, because many unrelated effects reuse them.
+
 ## Level and UI QA
 
 ### `spatial_check`
